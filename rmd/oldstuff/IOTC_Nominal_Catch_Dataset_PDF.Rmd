@@ -1,0 +1,130 @@
+---
+title: "The FIRMS Global Tuna Atlas: The IOTC nominal catch data set, `r paste(START_YEAR, END_YEAR, sep = '-')`"
+author: "IOTC Secretariat"
+classoption: landscape
+header-includes:
+- \usepackage[justification=raggedright,labelfont=bf,singlelinecheck=false]{caption}   #left align caption of kables
+- \newcommand{\beginsupplement}{\setcounter{table}{0}  \renewcommand{\thetable}{S\arabic{table}} \setcounter{figure}{0} \renewcommand{\thefigure}{S\arabic{figure}}}
+urlcolor: blue
+---
+  
+```{r general_options,echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, tidy.opts = list(width.cutoff=100), tidy = TRUE, size = "small")
+
+# Prevents formatting of numbers using scientific notation (e.g., in heatmap legends)
+options(scipen = 99999)
+
+#prettyNum with default ',' as big mark
+pn = function(number, big.mark = ",") {
+  return(prettyNum(number, big.mark = big.mark))
+}
+```
+
+# SUMMARY {-}
+
+Nominal catches correspond to the total annual retained catches (i.e. excluding discards) in live weight (t) by large IOTC area, species, fishing gear, and fleet for tuna and tuna-like species occurring in the Indian Ocean during the period `r paste(START_YEAR, END_YEAR, sep = "-")` ([https://www.iotc.org/data/datasets](https://www.iotc.org/data/datasets)). The document describes the processing steps to produce the IOTC component of the global nominal catch data set based on the latest version of the IOTC nominal catches after mapping with the standard code lists adopted for the Global Tuna Atlas.
+
+The export includes (i) all 16 IOTC species except southern bluefin tuna (_Thunnus maccoyii_) whose Indian Ocean catches are available from the [CCSBT](https://www.ccsbt.org/) data sets included in the FIRMS Global Tuna Atlas, (ii) some tuna and tuna-like species not under IOTC mandate (e.g., shortbill spearfish SSP) for the component of data reported at species level, i.e., data do not include catches for these species from a breakdown procedure applied to species aggregates.  
+
+The most commonly caught elasmobranchs (i.e., sharks and rays) differ from the best scientific estimates derived for the tuna and tuna-like species under IOTC mandate as they include some species aggregates (e.g., sharks nei) and gear aggregates (e.g., gillnet operated attached to a longline).
+
+\tableofcontents
+
+\pagebreak
+
+# CODES
+
+```{r child = "01_Code_Lists_Mapping.Rmd"}
+```
+
+```{r child = "02_NC_Extraction.Rmd"}
+```
+
+## Filtering
+
+```{r child = "03_NC_Filtering.Rmd"}
+```
+
+## Formatting
+
+```{r child = "04_NC_Consolidation.Rmd"}
+```
+
+## Mapping
+
+```{r child = "05_NC_Species_Gear_Fleet_Mapping.Rmd"}
+```
+
+## Exporting
+
+```{r child = "06_NC_Exports.Rmd"}
+```
+
+\pagebreak
+
+# RESULTS
+
+The overall data processing resulted in the removal of `r length(unique(SPECIES_EXCLUDED))` species from the data set, representing `r pn(sum(NC_COMBINED[SPECIES_CODE %in% SPECIES_EXCLUDED, CATCH]))` t of fish, i.e., `r round(sum(NC_COMBINED[SPECIES_CODE %in% SPECIES_EXCLUDED, CATCH])/sum(NC_COMBINED$CATCH)*100,1)`% of the total nominal catches reported to the Secretariat during `r paste(START_YEAR, END_YEAR, sep = "-")` (**Table 1**). The catches excluded are from southern bluefin tuna (SBF) (**Table 2**). The mapping to the standard code lists reduced the number of gears from `r length(unique(NC_MAPPED_SPECIES$GEAR_CODE))` to `r length(unique(NC_MAPPED_SPECIES_GEAR$gear))` and the fleets from `r length(unique(NC_MAPPED_SPECIES_GEAR$FLEET_CODE))` to `r length(unique(NC_MAPPED_SPECIES_GEAR_FLEET$fleet))` (**Table 1**). The species-specific nominal catches included in the IOTC component of the FIRMS Global Tuna Atlas are included in **Table 3**.
+
+**Table 1:** Description of the main components and catches (t) of the nominal catch data sets throughout the processing steps for building the IOTC component of the FIRMS Global Tuna Atlas
+
+| DATA SET  | DESCRIPTION | SPECIES  | GEARS | FLEETS | CATCH |
+| :------------------------------  | :------------------------------------- | ----: | ----: | ----: | --------: |
+| NC_COMBINED  | All tuna and tuna-like species, gears, and fleets | `r length(unique(NC_COMBINED$SPECIES_CODE))` | `r length(unique(NC_COMBINED$GEAR_CODE))` | `r length(unique(NC_COMBINED$FLEET_CODE))` | `r pn(round(sum(NC_COMBINED$CATCH)))` |
+| NC     | Keep species only occurring in Indian Ocean | `r length(unique(NC$SPECIES_CODE))` | `r length(unique(NC$GEAR_CODE))` | `r length(unique(NC$FLEET_CODE))` | `r pn(round(sum(NC$CATCH)))` |
+| NC_MAPPED_SPECIES | Species mapped with ASFIS code list | `r length(unique(NC_MAPPED_SPECIES$species))` | `r length(unique(NC_MAPPED_SPECIES$GEAR_CODE))` | `r length(unique(NC_MAPPED_SPECIES$FLEET_CODE))` | `r pn(round(sum(NC_MAPPED_SPECIES$CATCH)))` | 
+| NC_MAPPED_SPECIES_GEAR | Gears mapped with ISSCFG code list | `r length(unique(NC_MAPPED_SPECIES_GEAR$species))` | `r length(unique(NC_MAPPED_SPECIES_GEAR$gear))` | `r length(unique(NC_MAPPED_SPECIES_GEAR$FLEET_CODE))` | `r pn(round(sum(NC_MAPPED_SPECIES_GEAR$CATCH)))` |
+| NC_MAPPED_SPECIES_GEAR_FLEET | Fleets mapped with FIRMS fleet code list | `r length(unique(NC_MAPPED_SPECIES_GEAR_FLEET$species))` | `r length(unique(NC_MAPPED_SPECIES_GEAR_FLEET$gear))` | `r length(unique(NC_MAPPED_SPECIES_GEAR_FLEET$fleet))` | `r pn(round(sum(NC_MAPPED_SPECIES_GEAR_FLEET$CATCH)))` |
+
+<br />
+
+```{r NominalCatchBySpeciesExcluded}
+# Compute catch by species after converting MLW to WHM in order to get proper ASFIS code
+NC_SPECIES_EXCLUDED = NC_COMBINED[SPECIES_CODE %in% SPECIES_EXCLUDED, .(START = min(YEAR), END = max(YEAR), CATCH = sum(CATCH)), keyby = .(SPECIES_CODE)]
+
+# Add species information
+NC_SPECIES_EXCLUDED_TABLE = merge(NC_SPECIES_EXCLUDED, SPECIES[, .(`3A_CODE`, English_name, Scientific_name, Family)], by.x = "SPECIES_CODE", by.y = "3A_CODE", all.x = TRUE)[, .(CODE = SPECIES_CODE, FAMILY = Family, NAME = English_name, SCIENTIFIC_NAME = paste0("_", Scientific_name, "_"), START , END, CATCH = pn(round(CATCH)))][order(FAMILY, CODE)]
+```
+
+```{r DisplayNominalCatchBySpeciesExcluded}
+kable(NC_SPECIES_EXCLUDED_TABLE, row.names = FALSE, align = c("l", "l", "l", "l", "r", "r", "r"), caption = paste0("Nominal catches (t) of tuna and tuna-like species included in the IOTC database for the period ", START_YEAR, "-", END_YEAR, " and excluded from the data set exported to the FIRMS Global Tuna Atlas following the filter on species"))
+```
+
+\pagebreak
+
+```{r NominalCatchBySpeciesIncluded}
+# Compute catch by species
+NC_SPECIES = NC_IOTC_FIRMS[, .(START = min(year(time_start)), END = max(year(time_end)), CATCH = sum(value)), keyby = .(species)]
+
+# Add species information
+NC_SPECIES_TABLE = merge(NC_SPECIES, SPECIES[, .(`3A_CODE`, English_name, Scientific_name, Family)], by.x = "species", by.y = "3A_CODE", all.x = TRUE)[, .(CODE = species, FAMILY = Family, NAME = English_name, SCIENTIFIC_NAME = paste0("_", Scientific_name, "_"), START, END, CATCH = pn(round(CATCH)))][order(FAMILY, CODE)]
+```
+
+```{r DisplayNominalCatchBySpecies}
+kable(NC_SPECIES_TABLE, row.names = FALSE, align = c("l", "l", "l", "l", "r", "r", "r"), caption = "Total nominal catches (t) of tuna and tuna-like species included in the data set exported to the FIRMS Global Tuna Atlas")
+```
+
+\pagebreak
+
+# MAPPING TABLES
+
+\beginsupplement
+
+```{r MappingSpeciesTable}
+kable(MAPPING_SPECIES[src_code != trg_code, .(IOTC = src_code, ASFIS = trg_code)][order(IOTC)], row.names = TRUE, caption = "Mapping of species or groups of species codes from the IOTC database to the ASFIS code list used for the FIRMS Global Tuna Atlas when the source and target codes differ")
+```
+
+\pagebreak
+
+```{r MappingGearsTable}
+kable(MAPPING_GEAR[, .(IOTC = src_code, ISSCFG = trg_code)][order(IOTC)], row.names = TRUE, caption = "Mapping of gears or groups of gear codes from the IOTC database to the ISSCFG code list used for the FIRMS Global Tuna Atlas")
+```
+
+<br />
+
+\newpage
+
+```{r MappingFleetsTable}
+kable(MAPPING_FLEET[src_code != trg_code, .(IOTC = src_code, FIRMS = trg_code)][order(IOTC)], row.names = TRUE, caption = "Mapping of fleet codes from the IOTC database to the code list used for the FIRMS Global Tuna Atlas when the source and target codes differ")
+```
+

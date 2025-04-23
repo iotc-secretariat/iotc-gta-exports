@@ -1,0 +1,192 @@
+---
+title: "FIRMS Global Tuna Atlas: the IOTC purse seine and baitboat geo-referenced catch data set by month and 1°x1° grid area, 1970-2021"
+author: "IOTC Secretariat"
+output: 
+   html_document2:
+    css: "../templates/html_template.css"
+    number_sections: FALSE
+    code_folding: show
+    toc: true
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+  
+```{r general_options, echo = FALSE}
+knitr::opts_chunk$set(echo = FALSE, tidy = TRUE)
+
+pn = function(number, big.mark = ",") {
+  return(prettyNum(number, big.mark = big.mark))
+}
+```
+
+# SUMMARY
+
+Geo-referenced catch data correspond to the catch in live weight (t) or numbers, by species, fishing gear, grid area, month, and fleet ([https://www.iotc.org/data/datasets](https://www.iotc.org/data/datasets)). The IOTC purse seine and baitboat geo-referenced catch data set includes catches from offshore purse seine and coastal and offshore baitboat fisheries by month and 1°x1° grid area covering the period 1970-2021 for (i) the 16 tuna and tuna-like species under IOTC mandate, (ii) some tuna and tuna-like species not under IOTC mandate (e.g., shortbill spearfish), (iii) some pelagic shark and ray species commonly caught in tuna and tuna-like fisheries whose reporting to the IOTC varies with fishing gears (see Annex II of [Res. 15/01](https://www.iotc.org/cmm/resolution-1501-recording-catch-and-effort-data-fishing-vessels-iotc-area-competence)), and (iv) some species aggregates that include some of the species previously mentioned, e.g., true tunas nei.
+
+For baitboat and purse seine fishing vessels recorded in the IOTC Record of Authorized Vessels ([IOTC Res. 19/04](https://www.iotc.org/cmm/resolution-1904-concerning-iotc-record-vessels-authorised-operate-iotc-area-competence)), geo-referenced catch data should be extrapolated to the annual catch and reported on a monthly basis by 1°x1° grid area ([IOTC Res. 15/02](https://www.iotc.org/cmm/resolution-1502-mandatory-statistical-reporting-requirements-iotc-contracting-parties-and)). In the case of coastal (i.e., artisanal) fisheries, catch data may be reported by grid area or using alternative geographical areas that were approximated by regular 1°x1° grid areas when possible.
+
+The document describes the processing steps taken to produce the IOTC component of the global data set of purse seine and baitboat fisheries catches by 1°x1° grid area and month strata: (i) data extraction from the IOTC databases, (ii) filtering to remove species not occurring in the Indian Ocean, strata of spatial resolution larger than 1°x1° and temporal resolution longer than 1 month, and (iii) mapping with the standard code lists adopted by the FIRMS Global Tuna Atlas.
+
+# R SCRIPTS
+
+```{r Libraries, child = "0_1.Libraries.Rmd", echo = TRUE, results = "hide"}
+```
+
+## Loading code lists and mapping
+
+```{r CodeLists, child = "0_2.Code_Lists_Mapping.Rmd"}
+```
+
+## Extracting
+
+```{r Extraction, child = "2_1.CA_1deg_1m_PS_BB_Extraction.Rmd"}
+```
+
+## Filtering
+
+```{r Filtering, child = "2_2.CA_1deg_1m_PS_BB_Filtering.Rmd"}
+```
+
+## Consolidating
+
+```{r Consolidation, child = "2_3.CA_1deg_1m_PS_BB_Consolidation.Rmd"}
+```
+
+## Mapping
+
+```{r Mapping, child = "2_4.CA_1deg_1m_PS_BB_Mapping.Rmd"}
+```
+
+## Exporting
+
+```{r Export, child = "2_5.CA_1deg_1m_PS_BB_Export.Rmd"}
+```
+
+# RESULTS
+
+The data processing resulted in the removal of `r pn(round(sum(CA_PS_BB_RAW[CATCH_UNIT_CODE == "t", CATCH]) - sum(CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET[CATCH_UNIT_CODE == "t", CATCH])))` t of fish from the original data set through the filtering of species and spatio-temporal strata. The mapping to the standard code lists reduced the number of gears from `r length(unique(CA_PS_BB_11M_MAPPED_SPECIES$GEAR_CODE))` to `r length(unique(CA_PS_BB_11M_MAPPED_SPECIES_GEAR$gear))` and the fleets from `r length(unique(CA_PS_BB_11M_MAPPED_SPECIES$FLEET_CODE))` to `r length(unique(CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET$fleet))`.
+
+## Processing steps
+
+```{r ProcessingSteps, child = "2_6.CA_1deg_1m_PS_BB_Processing_Summary.Rmd"}
+```
+
+## Geo-referenced purse seine and baitboat catch data excluded from the GTA
+
+The overall data processing resulted in the removal of `r length(unique(SPECIES_EXCLUDED))` species from the data set, representing `r pn(round(sum(CA_PS_BB_SPECIES_EXCLUDED_TABLE$CATCH)))` t of fish. A total of `r length(unique(CA_PS_BB_EXCLUDED_SPATIAL$FISHING_GROUND_CODE))` spatial grids different from the 1°x1° resolution were removed from the data set, representing `r round(sum(CA_PS_BB_EXCLUDED_SPATIAL$CATCH))` t of fish. Furthermore, some catch data were reported with a temporal resolution larger than 1 month, corresponding to a total of `r round(sum(CA_PS_BB_EXCLUDED_TEMPORAL$CATCH))` t of fish in the original data set.
+
+### Species not occurring in the Indian Ocean
+
+```{r DisplayCatchBySpeciesExcluded, echo = FALSE}
+datatable(CA_PS_BB_SPECIES_EXCLUDED_TABLE, rownames = FALSE, options = list(dom = "t")) %>% formatRound("CATCH", digits = 0) %>% formatStyle("CATCH", `text-align` = "right")
+```
+
+### Strata of spatial resolution larger than 1°x1°
+
+```{r DisplaySpatialStrataExcluded}
+datatable(CA_PS_BB_EXCLUDED_SPATIAL_TABLE, rownames = FALSE, options = list(dom = "t")) %>% formatRound("CATCH", digits = 0) %>% formatStyle("CATCH", `text-align` = "right")
+```
+
+### Strata of temporal resolution larger than 1 month
+
+```{r DisplayTemporalStrataExcluded}
+datatable(CA_PS_BB_EXCLUDED_TEMPORAL_TABLE, rownames = FALSE, options = list(dom = "t")) %>% formatRound("CATCH", digits = 0) %>% formatStyle("CATCH", `text-align` = "right")
+```
+
+## Geo-referenced purse seine and baitboat catch data exported to the GTA
+
+### Total catch by species
+
+```{r CatchBySpeciesIncluded}
+# Compute catch by species
+CA_SPECIES = CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET[, .(YEAR_INITIAL = min(year(time_start)), YEAR_FINAL = max(year(time_end)), CATCH = sum(CATCH)), keyby = .(species, UNIT = CATCH_UNIT_CODE)]
+
+# Add species information
+CA_SPECIES_TABLE = merge(CA_SPECIES, SPECIES[, .(`3A_CODE`, English_name, Scientific_name, Family)], by.x = "species", by.y = "3A_CODE")[, .(ASFIS_CODE = species, ASFIS_FAMILY = Family, ASFIS_NAME = English_name, ASFIS_SCIENTIFIC_NAME = Scientific_name, YEAR_INITIAL, YEAR_FINAL, UNIT, CATCH)][order(ASFIS_FAMILY, ASFIS_CODE)]
+```
+
+```{r DisplayCatchBySpecies, echo = FALSE}
+datatable(CA_SPECIES_TABLE, rownames = FALSE, filter = "bottom") %>% formatRound("CATCH", digits = 0) %>% formatStyle("ASFIS_SCIENTIFIC_NAME", `font-style` = "italic")
+```
+
+### Total catch by gear
+
+```{r CatchByGearIncluded, echo = FALSE}
+# Compute catch by gear
+CA_GEAR = CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET[, .(YEAR_INITIAL = min(year(time_start)), YEAR_FINAL = max(year(time_end)), CATCH = sum(CATCH)), keyby = .(gear, UNIT = CATCH_UNIT_CODE)]
+
+# Add gear information
+CA_GEAR_TABLE = merge(CA_GEAR, GEARS, by.x = "gear", by.y = "code")[, .(ISSCFG_CODE = gear, ISSCFG_LABEL = label, ISSCFG_ABBREVIATION = standard_abbreviations, YEAR_INITIAL, YEAR_FINAL, UNIT, CATCH)]
+```
+
+```{r DisplayCatchByGear, echo = FALSE}
+datatable(CA_GEAR_TABLE, rownames = FALSE, filter = "bottom") %>% formatRound("CATCH", digits = 0)
+```
+
+### Total catch by fleet
+
+```{r CatchByFleetIncluded, echo = FALSE}
+# Compute catch by fleet
+CA_FLEET = CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET[, .(YEAR_INITIAL = min(year(time_start)), YEAR_FINAL = max(year(time_end)), CATCH = sum(CATCH)), keyby = .(fleet, UNIT = CATCH_UNIT_CODE)]
+
+# Add gear information
+CA_FLEET_TABLE = merge(CA_FLEET, FLEETS, by.x = "fleet", by.y = "code")[, .(FIRMS_FLEET_CODE = fleet, FIRMS_FLEET = label, YEAR_INITIAL, YEAR_FINAL, UNIT, CATCH)]
+```
+
+```{r DisplayCatchByFleet, echo = FALSE}
+datatable(CA_FLEET_TABLE, rownames = FALSE, filter = "bottom") %>% formatRound("CATCH", digits = 0)
+```
+
+# DATA EXCHANGE FORMAT
+
+```{r TableExportFormat, echo = FALSE}
+datatable(DDD, rownames = FALSE, options = list(dom = "t", pageLength = 14)) %>% 
+  formatStyle(columns = "ENTITY", target = "row", backgroundColor = styleEqual("Administrative", "#EFF3FF")) %>%
+  formatStyle(columns = "ENTITY", target = "row", backgroundColor = styleEqual("Temporal", "#BDD7E7")) %>%
+  formatStyle(columns = "ENTITY", target = "row", backgroundColor = styleEqual("Spatial", "#6BAED6")) %>%
+  formatStyle(columns = "ENTITY", target = "row", backgroundColor = styleEqual("Technical", "#3182BD")) %>%
+  formatStyle(columns = "ENTITY", target = "row", backgroundColor = styleEqual("Measurement", "#08519C")) %>% 
+  formatStyle(columns = "ENTITY", target = "row", color = styleEqual("Measurement", "white"))
+```
+
+# REFERENCE CODE LISTS
+
+## Species
+
+```{r SpeciesCodeList, echo = FALSE}
+datatable(SPECIES_CODE_LIST, rownames = FALSE, filter = "bottom", options = list(dom = "Bfrtip", buttons = list(list(extend = "csv")))) %>% formatStyle("Scientific_name", `font-style` = "italic")
+```
+
+## Gears
+
+```{r GearCodeList, echo = FALSE}
+datatable(GEAR_CODE_LIST, rownames = FALSE, filter = "bottom",  options = list(dom = "Bfrtip", buttons = list(list(extend = "csv"))))
+```
+
+## Fleets
+
+```{r FleetCodeList, echo = FALSE}
+datatable(FLEET_CODE_LIST, rownames = FALSE, filter = "bottom", extensions = "Buttons", options = list(dom = "Bfrtip", buttons = list(list(extend = "csv"))))
+```
+
+# MAPPING TABLES
+
+## IOTC species codes to ASFIS
+
+```{r MappingSpeciesTable, echo = FALSE}
+datatable(MAPPING_SPECIES[src_code != trg_code, .(IOTC_SPECIES_CODE = src_code, ASFIS_CODE = trg_code, ASFIS_NAME = English_name, ASFIS_SCIENTIFIC_NAME = Scientific_name)][order(IOTC_SPECIES_CODE)], rownames = FALSE, filter = "bottom", options = list(dom = "Bfrtip", buttons = list(list(extend = "csv")))) %>% formatStyle("ASFIS_SCIENTIFIC_NAME", `font-style` = "italic")
+```
+
+## IOTC gear codes to ISSCFG
+
+```{r MappingGearsTable, echo = FALSE}
+datatable(MAPPING_GEAR[, .(IOTC_GEAR_CODE = src_code, ISSCFG_CODE = trg_code, ISSCFG_LABEL = label, ISSCFG_ABBREVIATION = standard_abbreviations)][order(IOTC_GEAR_CODE)], rownames = FALSE, filter = "bottom", options = list(dom = "Bfrtip", buttons = list(list(extend = "csv"))))
+```
+
+## IOTC fleet codes to FIRMS fishing fleets
+
+```{r MappingFleetsTable, echo = FALSE}
+datatable(MAPPING_FLEET[src_code != trg_code, .(IOTC_FLEET_CODE = src_code, FIRMS_FLEET_CODE = trg_code, FIRMS_FLEET_LABEL = label)][order(IOTC_FLEET_CODE)], rownames = FALSE, filter = "bottom", options = list(dom = "Bfrtip", buttons = list(list(extend = "csv"))))
+```
+

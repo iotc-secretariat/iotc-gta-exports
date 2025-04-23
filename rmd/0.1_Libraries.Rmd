@@ -1,0 +1,5 @@
+```{r Rlibraries}
+# Load R libraries
+pacman::p_load("data.table", "DT", "iotc.base.common.data", "lubridate", "openxlsx")
+```
+

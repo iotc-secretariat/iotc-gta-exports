@@ -1,0 +1,16 @@
+```{r Data_extraction, echo = TRUE}
+# Extract NC best scientific estimates for the 16 IOTC tuna and tuna-like species under IOTC mandate
+NC_EST_IOTC_SPECIES = NC_est(factorize_result = FALSE, years = START_YEAR:END_YEAR)
+
+# Add information on fate
+NC_EST_IOTC_SPECIES[, `:=` (FATE_TYPE_CODE = "RETAINED", FATE_TYPE = "Retained", FATE_CODE = "RFL", FATE = "Retained - for landing / sale")]
+
+# Extract NC raw catch data for other tuna, tuna-like, shark, and ray species
+NC_RAW_OTHER_SPECIES = NC_raw(species_category_codes = c("BILLFISH", "NERITIC", "TEMPERATE", "TROPICAL", "SEERFISH", "SHARKS", "RAYS"), factorize_results = FALSE, years = START_YEAR:END_YEAR)[IS_SPECIES_AGGREGATE == FALSE & !SPECIES_CODE %in% unique(NC_EST_IOTC_SPECIES$SPECIES_CODE)]
+
+# Temp fix for ALV assumed not to occur in the Indian Ocean (Romanov 2015)
+NC_RAW_OTHER_SPECIES[SPECIES_CODE == "ALV", `:=` (SPECIES_CODE = "THR", SPECIES = "Thresher sharks nei", SPECIES_SCIENTIFIC = "Alopias spp")]
+
+# Combined both data sets
+NC_COMBINED = rbindlist(list(NC_EST_IOTC_SPECIES, NC_RAW_OTHER_SPECIES[, -c("QUARTER")]), use.names = TRUE)
+```

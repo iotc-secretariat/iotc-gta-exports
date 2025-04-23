@@ -1,0 +1,10 @@
+```{r Dataset_Code_lists, echo = FALSE}
+# ASFIS code list
+SPECIES_CODE_LIST = SPECIES[code %in% unique(NC$species), .(code, definition, name_en, name_fr, taxon_family)][order(code)]
+
+# Gear code list
+GEAR_CODE_LIST = GEARS[code %in% unique(NC$gear_type), -c("definition")][order(code)][order(code)]
+
+# Fleet code list
+FLEET_CODE_LIST = FLEETS[code %in% unique(NC$fishing_fleet), -c("uri", "definition")][order(code)]
+```

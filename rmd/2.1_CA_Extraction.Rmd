@@ -1,0 +1,16 @@
+```{r Data_extraction, echo = TRUE}
+# Extract geo-referenced catch data for tuna and tuna-like species
+CA_RAW_TUNA_LIKE_SPECIES = CA_raw_off(species_category_codes = c("BILLFISH", "NERITIC", "TEMPERATE", "TROPICAL", "TUNAS_NEI", "SEERFISH"), factorize_result = FALSE)
+
+# Extract geo-referenced catch data for sharks
+CA_RAW_SHARKS = CA_raw_off(factorize_result = FALSE)[SPECIES_CATEGORY_CODE == "SHARKS"]
+
+# Temp fix for ALV assumed not to occur in the Indian Ocean (Romanov 2015)
+CA_RAW_SHARKS[SPECIES_CODE == "ALV", `:=` (SPECIES_CODE = "THR", SPECIES = "Thresher sharks nei", SPECIES_SCIENTIFIC = "Alopias spp")]
+
+# Extract geo-referenced catch data for rays
+CA_RAW_RAYS = CA_raw_off(factorize_result = FALSE)[SPECIES_CATEGORY_CODE == "RAYS"]
+
+# Combined data sets
+CA_RAW = rbindlist(list(CA_RAW_TUNA_LIKE_SPECIES, CA_RAW_SHARKS, CA_RAW_RAYS))
+```

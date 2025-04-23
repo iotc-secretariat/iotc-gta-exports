@@ -1,0 +1,14 @@
+```{r ReadCodeLists, echo = TRUE}
+# ASFIS species
+SPECIES = fread("../inputs/codelists/cl_asfis_species.csv", colClasses = "character", encoding = "UTF-8")
+
+# ISSCFG gears
+GEARS = fread("../inputs/codelists/cl_isscfg_gear.csv", colClasses = "character", encoding = "UTF-8")
+
+# FIRMS fleets
+FLEETS = fread("../inputs/codelists/cl_fishing_fleet.csv", colClasses = "character", encoding = "UTF-8")
+
+# IOTC main areas
+AREAS = fread("../inputs/codelists/cl_nc_iotc_areas.csv", encoding = "UTF-8")
+```
+

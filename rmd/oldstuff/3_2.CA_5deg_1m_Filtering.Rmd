@@ -1,0 +1,48 @@
+```{r Species_Filtering, echo = TRUE}
+# Species not occurring in the Indian Ocean
+SPECIES_TO_EXCLUDE = c("SAI", "SPF", "BFT", "WHM", "LTA")
+
+# Exclude the species from the data set
+SPECIES_EXCLUDED = unique(CA_RAW[SPECIES_CODE %in% SPECIES_TO_EXCLUDE, SPECIES_CODE])
+CA = CA_RAW[!SPECIES_CODE %in% SPECIES_EXCLUDED]
+```
+
+```{r CatchBySpeciesExcluded, echo = FALSE}
+# Compute catch by excluded species
+CA_SPECIES_EXCLUDED = CA_RAW[SPECIES_CODE %in% SPECIES_EXCLUDED, .(YEAR_INITIAL = min(YEAR), YEAR_FINAL = max(YEAR), CATCH = sum(CATCH)), keyby = .(SPECIES_CODE, CATCH_UNIT_CODE)]
+
+# Add species information
+CA_SPECIES_EXCLUDED_TABLE = merge(CA_SPECIES_EXCLUDED, SPECIES[, .(`3A_CODE`, English_name, Scientific_name, Family)], by.x = "SPECIES_CODE", by.y = "3A_CODE", all.x = TRUE)[, .(ASFIS_CODE = SPECIES_CODE, ASFIS_FAMILY = Family, ASFIS_NAME = English_name, ASFIS_SCIENTIFIC_NAME = Scientific_name, YEAR_INITIAL, YEAR_FINAL, UNIT = CATCH_UNIT_CODE, CATCH = CATCH)][order(ASFIS_FAMILY, ASFIS_CODE)]
+```
+
+```{r Spatio_temporal_Strata_Filtering, echo = TRUE}
+# Convert 1x1 CWP grids to 5x5 CWP grids
+CA[as.numeric(substr(FISHING_GROUND_CODE, 1, 1)) == 5, FISHING_GROUND_CODE := convert_CWP_grid(FISHING_GROUND_CODE, target_grid_type_code = grid_5x5), by = .(FISHING_GROUND_CODE)]
+
+# Restrict to data reported with a 5x5 grid spatial resolution AND a monthly temporal resolution
+CA_55M = CA[as.numeric(substr(FISHING_GROUND_CODE, 1, 1)) == 6 & MONTH_END - MONTH_START == 0]
+```
+
+```{r Spatial_Strata_Removed, echo = FALSE}
+# Extract data NOT reported with a 5x5 grid spatial resolution OR a monthly temporal resolution
+CA_EXCLUDED_SPATIAL = CA[as.numeric(substr(FISHING_GROUND_CODE, 1, 1)) != 6]
+
+# Add information on grid type
+CA_EXCLUDED_SPATIAL = merge(CA_EXCLUDED_SPATIAL, filter_grids()[, .(FISHING_GROUND_CODE, FISHING_GROUND_TYPE)], by = "FISHING_GROUND_CODE", all.x = TRUE)
+
+# Irregular grids (not included in filter_grids())
+CA_EXCLUDED_SPATIAL[is.na(FISHING_GROUND_TYPE), FISHING_GROUND_TYPE := "IRREGULAR"]
+
+# Compute the catches excluded by type of grid
+CA_EXCLUDED_SPATIAL_TABLE = CA_EXCLUDED_SPATIAL[, .(CATCH = sum(CATCH)), keyby = .(GRID_TYPE = FISHING_GROUND_TYPE, UNIT = CATCH_UNIT_CODE)]
+```
+
+```{r Temporal_Strata_Removed, echo = FALSE}
+CA_EXCLUDED_TEMPORAL = CA[MONTH_END - MONTH_START != 0]
+
+# Compute the monthly difference
+CA_EXCLUDED_TEMPORAL[, MONTH_DIFF := as.character(MONTH_END - MONTH_START + 1)]
+
+# Compute the catches excluded by time bin
+CA_EXCLUDED_TEMPORAL_TABLE = CA_EXCLUDED_TEMPORAL[, .(CATCH = sum(CATCH)), keyby = .(MONTH_DIFF, UNIT = CATCH_UNIT_CODE)]
+```

@@ -1,0 +1,209 @@
+---
+title: "The FIRMS Global Tuna Atlas: The geo-referenced surface fisheries catch data set"
+author: "IOTC Secretariat"
+classoption: landscape
+header-includes:
+- \usepackage[justification=raggedright,labelfont=bf,singlelinecheck=false]{caption}   #left align caption of kables
+- \newcommand{\beginsupplement}{\setcounter{table}{0}  \renewcommand{\thetable}{S\arabic{table}} \setcounter{figure}{0} \renewcommand{\thefigure}{S\arabic{figure}}}
+urlcolor: blue
+---
+  
+```{r general_options, echo = FALSE}
+options(scipen = 999)
+knitr::opts_chunk$set(echo = FALSE,tidy.opts=list(width.cutoff=105),tidy=TRUE,size="small")
+knit_hooks$set(inline = function(x) {prettyNum(x, big.mark=",")})
+options(knitr.kable.NA = '')
+```
+
+# SUMMARY {-}
+
+Geo-referenced catch data correspond to the catch by species in live weight and fishing effort by type of fishery by grid area and month strata, which should be extrapolated to annual catch in the case of surface fisheries ([https://iotc.org/data/datasets](https://iotc.org/data/datasets)). The document describes the processing steps to produce the IOTC component of the global catch data set of surface fisheries (i.e. baitboat and purse seine fisheries) by 1° grid area and month strata after mapping with the standard code lists adopted for the FIRMS Global Tuna Atlas.
+
+\tableofcontents
+
+\pagebreak
+
+# CODES
+
+```{r child = "IOTC_Data_Inputs.Rmd"}
+```
+
+```{r Data_extraction, echo = TRUE}
+# Extract geo-referenced baitboat and purse seine catch data (t) for tuna and tuna-like species
+CA_SURF_RAW = CA_raw_off(fishery_group_codes = c("BB", "PS"), species_category_codes = c("BILLFISH", "NERITIC", "TEMPERATE", "TROPICAL", "TUNAS_NEI", "SEERFISH"), factorize_result = FALSE)
+```
+
+## Filtering
+
+```{r child = "IOTC_Species_To_Exclude.Rmd"}
+```
+
+```{r Species_Filtering, echo = TRUE}
+# Exclude the species from the data set
+SpeciesExcluded = unique(CA_SURF_RAW[SPECIES_CODE %in% SpeciesToExclude, SPECIES_CODE])
+CA_SURF = CA_SURF_RAW[!SPECIES_CODE %in% SpeciesExcluded]
+```
+
+```{r Spatiotemporal_Strata_Filtering, echo = TRUE}
+# Restrict to data reported with a 1x1 grid spatial resolution AND a monthly temporal resolution
+CA_SURF_11M = CA_SURF[as.numeric(substr(FISHING_GROUND_CODE,1,1)) == 5 & MONTH_END-MONTH_START == 0]
+```
+
+## Formatting
+
+```{r Fields_Addition_Formatting, echo = TRUE}
+# Add source authority
+CA_SURF_11M[, `:=` (source_authority = "IOTC")]
+
+# Add school type
+CA_SURF_11M[, `:=` (schooltype = fifelse(CATCH_SCHOOL_TYPE_CODE == "LA", "LS",
+                                    fifelse(CATCH_SCHOOL_TYPE_CODE == "UNCL", "UNK", 
+                                            fifelse(CATCH_SCHOOL_TYPE_CODE == "FD", "DEL",
+                                                    CATCH_SCHOOL_TYPE_CODE))))]
+
+# Add unit
+CA_SURF_11M[, `:=` (unit = fifelse(CATCH_UNIT_CODE == "MT", "t", fifelse(CATCH_UNIT_CODE == "NO", "no", "unk")))]
+
+## Add catch type
+CA_SURF_11M[, `:=` (catchtype = "UNK")]
+
+# Add time_start
+CA_SURF_11M[, `:=` (time_start = as.Date(paste(YEAR, "-", MONTH_START, "-01", sep = ""), format = "%Y-%m-%d"))]
+
+# Add time_end
+CA_SURF_11M[, `:=` (time_end = as.Date(paste(YEAR, "-", MONTH_END, "-01", sep = ""), format = "%Y-%m-%d") %m+% months(1) - 1) ]
+
+```
+
+## Mapping
+
+```{r Species_Gear_Fleet_Mapping, echo = TRUE}
+# Merge with ASFIS species list
+CA_SURF_11M_MAPPEDSPECIES = merge(CA_SURF_11M, MappingSpecies[src_codingsystem == "species_iotc" & trg_codingsystem == "species_asfis", .(src_code, species = trg_code)], by.x = "SPECIES_CODE", by.y = "src_code", all.x = TRUE)
+
+# Merge with ISSCFG gear list
+CA_SURF_11M_MAPPEDSPECIESGEAR = merge(CA_SURF_11M_MAPPEDSPECIES, MappingGear[src_codingsystem == "gear_iotc" & trg_codingsystem == "isscfg_revision_1", .(src_code, gear = trg_code)], by.x = "GEAR_CODE", by.y = "src_code", all.x = TRUE)
+
+# Merge with FIRMS fleet list
+CA_SURF_11M_MAPPEDSPECIESGEARFLEET = merge(CA_SURF_11M_MAPPEDSPECIESGEAR, MappingFleet[src_codingsystem == "fleet_iotc" & trg_codingsystem == "fleet_firms", .(src_code, fleet = trg_code)], by.x = "FLEET_CODE", by.y = "src_code", all.x=TRUE)
+```
+
+```{r Mapping_Check, echo = FALSE}
+# Check if missing species
+if (nrow(CA_SURF_11M_MAPPEDSPECIES[is.na(species)])>0) print( paste("The following species codes are missing from the mapping: ", paste0(unique(CA_SURF_11M_MAPPEDSPECIES[is.na(species), SPECIES_CODE]), collapse = "|")))
+
+# Check if missing gears
+if (nrow(CA_SURF_11M_MAPPEDSPECIESGEAR[is.na(gear)])>0) print( paste("The following gear codes are missing from the mapping: ", paste0(unique(CA_SURF_11M_MAPPEDSPECIESGEAR[is.na(gear), GEAR_CODE]), collapse = "|")))
+
+# Check if missing fleets
+if (nrow(CA_SURF_11M_MAPPEDSPECIESGEARFLEET[is.na(fleet)])>0) print( paste("The following flag codes are missing from the mapping: ", paste0(unique(CA_SURF_11M_MAPPEDSPECIESGEARFLEET[is.na(fleet), FLAG_CODE]), collapse = "|")))
+```
+
+## Exporting
+
+```{r Dataset_Export, echo = TRUE}
+# Build the 1x1 monthly surface fisheries data set with mapping to GTA code lists
+CA_SURF_11M_FIRMS = CA_SURF_11M_MAPPEDSPECIESGEARFLEET[, .(value = sum(CATCH, na.rm = TRUE)), by= .(fleet, gear, time_start, time_end, geographic_identifier = FISHING_GROUND_CODE, schooltype, species, catchtype, unit, source_authority)]
+
+# Order columns
+setcolorder(CA_SURF_11M_FIRMS,neworder = c("fleet", "gear", "time_start", "time_end", "geographic_identifier", "schooltype", "species", "catchtype", "unit", "source_authority", "value"))
+
+# Export the 1x1 monthly surface fisheries data set with mapping to GTA code lists
+write.csv(CA_SURF_11M_FIRMS, file = paste0("../outputs/datasets/iotc_catch_1deg_1m_ps_bb_firms_level0_", Sys.Date(), ".csv"),row.names = FALSE)
+```
+
+\pagebreak
+
+# RESULTS
+
+The data processing resulted in the removal of `r round( sum(CA_SURF_RAW[CATCH_UNIT_CODE == "MT", CATCH]) - sum(CA_SURF_11M_MAPPEDSPECIESGEARFLEET[CATCH_UNIT_CODE == "MT", CATCH]) )` t of fish from the original data set through the filtering of species and spatio-temporal strata (**Table 1**). The mapping to the standard code lists reduced the number of gears from `r length(unique(CA_SURF_11M_MAPPEDSPECIES$GEAR_CODE))` to `r length(unique(CA_SURF_11M_MAPPEDSPECIESGEAR$gear))` and the fleets from `r length(unique(CA_SURF_11M_MAPPEDSPECIES$FLEET_CODE))` to `r length(unique(CA_SURF_11M_MAPPEDSPECIESGEARFLEET$fleet))` (**Table 1**). The species-specific geo-referenced catches included in the IOTC component of the FIRMS Global Tuna Atlas are included in **Table 4**.
+
+**Table 1:** Description of the main components and catches of the geo-referenced surface fisheries catch data sets throughout the processing steps for building the IOTC component of the FIRMS Global Tuna Atlas
+
+| Data set  | Description | Species | Gears | Fleets | Catch (t) | Catch (no) | 
+| :--------------------------------------------  | :------------------------------------- | ----: | ----: | ----: | --------: | --------: |
+| CA_SURF_RAW                        | All species, gears, and fleets | `r length(unique(CA_SURF_RAW$SPECIES_CODE))` | `r length(unique(CA_SURF_RAW$GEAR_CODE))` | `r length(unique(CA_SURF_RAW$FLEET_CODE))` | `r round(sum(CA_SURF_RAW[CATCH_UNIT_CODE == "MT", CATCH]))` | `r round(sum(CA_SURF_RAW[CATCH_UNIT_CODE == "NO", CATCH]))` |
+| CA_SURF                            | Keep species occurring in Indian Ocean | `r length(unique(CA_SURF$SPECIES_CODE))` | `r length(unique(CA_SURF$GEAR_CODE))` | `r length(unique(CA_SURF$FLEET_CODE))` | `r round(sum(CA_SURF[CATCH_UNIT_CODE == "MT", CATCH]))` | `r round(sum(CA_SURF[CATCH_UNIT_CODE == "NO", CATCH]))` | 
+| CA_SURF_11M                        | Selection of monthly 1x1 strata  | `r length(unique(CA_SURF_11M$SPECIES_CODE))` | `r length(unique(CA_SURF_11M$GEAR_CODE))` | `r length(unique(CA_SURF_11M$FLEET_CODE))` | `r round(sum(CA_SURF_11M[CATCH_UNIT_CODE == "MT", CATCH]))` | `r round(sum(CA_SURF_11M[CATCH_UNIT_CODE == "NO", CATCH]))` |
+| CA_SURF_11M_MAPPEDSPECIES          | Species mapped with ASFIS code list | `r length(unique(CA_SURF_11M_MAPPEDSPECIES$species))` | `r length(unique(CA_SURF_11M_MAPPEDSPECIES$GEAR_CODE))` | `r length(unique(CA_SURF_11M_MAPPEDSPECIES$FLEET_CODE))` | `r round(sum(CA_SURF_11M_MAPPEDSPECIES[CATCH_UNIT_CODE == "MT", CATCH]))` | `r round(sum(CA_SURF_11M_MAPPEDSPECIES[CATCH_UNIT_CODE == "NO", CATCH]))` | 
+| CA_SURF_11M_MAPPEDSPECIESGEAR      | Gears mapped with ISSCFG code list | `r length(unique(CA_SURF_11M_MAPPEDSPECIESGEAR$species))` | `r length(unique(CA_SURF_11M_MAPPEDSPECIESGEAR$gear))` | `r length(unique(CA_SURF_11M_MAPPEDSPECIESGEAR$FLEET_CODE))` | `r round(sum(CA_SURF_11M_MAPPEDSPECIESGEAR[CATCH_UNIT_CODE == "MT", CATCH]))` | `r round(sum(CA_SURF_11M_MAPPEDSPECIESGEAR[CATCH_UNIT_CODE == "NO", CATCH]))`
+| CA_SURF_11M_MAPPEDSPECIESGEARFLEET | Fleets mapped with FIRMS fleet code list | `r length(unique(CA_SURF_11M_MAPPEDSPECIESGEARFLEET$species))` | `r length(unique(CA_SURF_11M_MAPPEDSPECIESGEARFLEET$gear))` | `r length(unique(CA_SURF_11M_MAPPEDSPECIESGEARFLEET$fleet))` | `r round(sum(CA_SURF_11M_MAPPEDSPECIESGEARFLEET[CATCH_UNIT_CODE == "MT", CATCH]))` | `r round(sum(CA_SURF_11M_MAPPEDSPECIESGEARFLEET[CATCH_UNIT_CODE == "NO", CATCH]))` |
+
+<br />
+
+```{r Species_Excluded_Catch}
+# Compute catch for each species excluded
+CA_SURF_SPECIES_EXCLUDED = CA_SURF_RAW[SPECIES_CODE %in% SpeciesExcluded, .(YEAR_START = min(YEAR), YEAR_END = max(YEAR), CATCH = sum(CATCH)), keyby = .(SPECIES_CODE, CATCH_UNIT_CODE)]
+
+# Add species information
+CA_SURF_SPECIES_EXCLUDED_TABLE = merge(CA_SURF_SPECIES_EXCLUDED, Species[,.(code,label,scientific_name,family)], by.x = "SPECIES_CODE", by.y = "code", all.x = TRUE)[, .(CODE = SPECIES_CODE, FAMILY = family, NAME = label, SCIENTIFIC_NAME = paste0("_", scientific_name, "_"), START = YEAR_START, END = YEAR_END, UNIT = CATCH_UNIT_CODE, CATCH = prettyNum(round(CATCH), big.mark = ","))][order(FAMILY, CODE)]
+```
+
+A total of `r length(unique(SpeciesExcluded))` species were removed from the data set, representing `r sum(CA_SURF_RAW[SPECIES_CODE %in% SpeciesExcluded,CATCH])` t of fish, i.e. `r round(sum(CA_SURF_RAW[SPECIES_CODE %in% SpeciesExcluded,CATCH])/sum(CA_SURF_RAW$CATCH)*100,1)`% of the total nominal catches reported to the Secretariat during 1950-2019. The catches excluded are dominated by southern bluefin tuna (SBF) which represented `r round(sum(CA_SURF_RAW[SPECIES_CODE == "SBF",CATCH])/sum(CA_SURF_RAW[SPECIES_CODE %in% SpeciesExcluded,CATCH])*100,2)`% of the total catches excluded from the original data set (**Table 2**). SBF catches are available from the CCSBT data sets available in the FIRMS Global Tuna Atlas. The other species removed only occurs in the Atlantic Ocean.
+
+```{r DisplayGeoreferencedSurfaceFisheriesCatchBySpeciesExcluded}
+kable(CA_SURF_SPECIES_EXCLUDED_TABLE, row.names = FALSE, align = c("l", "l", "l" ,"l", "r", "r", "r"), caption = "Total geo-referenced catches (t) of tuna and tuna-like species included in the IOTC database for the period 1950-2019 and excluded from the data set exported to the FIRMS Global Tuna Atlas following the filter on species")
+```
+
+```{r SpatialStrataExcludedDataFromGeoreferencedSurfaceFisheriesCatches11M, echo = FALSE}
+# Extract data not complying with 1x1 grids
+CA_SURF_EXCLUDED_SPATIAL = merge(CA_SURF[as.numeric(substr(FISHING_GROUND_CODE,1,1)) != 5],  filter_grids()[, .(FISHING_GROUND_CODE, FISHING_GROUND_TYPE)], by = "FISHING_GROUND_CODE", all.x = TRUE)
+
+# Irregular grids (not included in filter_grids())
+CA_SURF_EXCLUDED_SPATIAL[is.na(FISHING_GROUND_TYPE), FISHING_GROUND_TYPE := "IRREGULAR"]
+
+# Compute the catches excluded by type of grid
+CA_SURF_EXCLUDED_SPATIAL_TABLE = CA_SURF_EXCLUDED_SPATIAL[, .(CATCH = prettyNum(round(sum(CATCH)),big.mark = ",")), keyby = .(GRID_TYPE = FISHING_GROUND_TYPE, UNIT = CATCH_UNIT_CODE)]
+```
+
+```{r TemporalStrataExcludedDataFromGeoreferencedSurfaceFisheriesCatches11M}
+# Extract data not complying with monthly temporal resolution
+CA_SURF_EXCLUDED_TEMPORAL = CA_SURF[MONTH_END-MONTH_START != 0]
+
+# Compute the monthly difference
+CA_SURF_EXCLUDED_TEMPORAL[, MONTH_DIFF := MONTH_END-MONTH_START]
+
+# Compute the 
+CA_SURF_EXCLUDED_TEMPORAL_TABLE = CA_SURF_EXCLUDED_TEMPORAL[, .(Catches = prettyNum(round(sum(CATCH)), big.mark = ",")), keyby= .(MONTH_DIFF, Unit = CATCH_UNIT_CODE)]
+```
+
+A total of `r length(unique(CA_SURF_EXCLUDED_SPATIAL$FISHING_GROUND_CODE))` spatial grids different from the 1x1° resolution were removed from the data set, representing `r round(sum(CA_SURF_EXCLUDED_SPATIAL$CATCH))` t of fish. The catches excluded from the data set by type of spatial stratum are given in **Table 3**. Furthermore, some catch data were reported with a temporal resolution larger than 1 month, corresponding to a total of `r round(sum(CA_SURF_EXCLUDED_TEMPORAL$CATCH))` t of fish in the original data set.
+
+```{r DisplayGeoreferencedSurfaceFisheriesCatchSpatialExcluded}
+kable(CA_SURF_EXCLUDED_SPATIAL_TABLE, row.names = FALSE, align = c("l", "l", "r"), caption = "Total geo-referenced catches of tuna and tuna-like species by surface fisheries as included in the IOTC database for the period 1950-2019 and excluded from the data set exported to the FIRMS Global Tuna Atlas following the filter on spatial resolution")
+```
+
+```{r Species_Included_Catch}
+# Compute catch by species
+CA_SURF_11M_FIRMS_SPECIES = CA_SURF_11M_FIRMS[, .(YEAR_START = min(year(time_start)), YEAR_END = max(year(time_end)), CATCH = sum(value)), keyby=.(species, unit)]
+
+# Add species information
+CA_SURF_11M_FIRMS_SPECIES_TABLE = merge(CA_SURF_11M_FIRMS_SPECIES[round(CATCH)>0], Species[, .(code, label, scientific_name, family)], by.x = "species", by.y = "code", all.x = TRUE)[, .(CODE = species, FAMILY = family, NAME = label, SCIENTIFIC_NAME = fifelse(scientific_name != "NA", paste0("_", scientific_name, "_"), ""), START = YEAR_START, END = YEAR_END, UNIT = unit, CATCH = prettyNum(round(CATCH), big.mark = ","))][order(FAMILY, CODE)]
+```
+
+```{r Display_Species_Included_Catch}
+kable(CA_SURF_11M_FIRMS_SPECIES_TABLE, row.names = FALSE, align = c("l", "l", "l", "l", "r", "r", "l", "r"), caption = "Total geo-referenced catches of tuna and tuna-like species by surface fisheries as included in the data set exported to the FIRMS Global Tuna Atlas")
+```
+
+\pagebreak
+
+# MAPPING TABLES
+
+\beginsupplement
+
+```{r MappingSpeciesTable}
+kable(MappingSpecies[src_code != trg_code, .(IOTC = src_code, ASFIS = trg_code)][order(IOTC)], row.names = TRUE, caption = "Mapping of species or groups of species codes from the IOTC database to the ASFIS code list used for the FIRMS Global Tuna Atlas when the source and target codes differ")
+```
+
+\pagebreak
+
+```{r MappingGearsTable}
+kable(MappingGear[, .(IOTC = src_code, ISSCFG = trg_code)][order(IOTC)], row.names = TRUE, caption = "Mapping of gears or groups of gear codes from the IOTC database to the ISSCFG code list used for the FIRMS Global Tuna Atlas")
+```
+
+\pagebreak
+
+```{r MappingFleetsTable}
+kable(MappingFleet[src_code != trg_code, .(IOTC = src_code, FIRMS = trg_code)][order(IOTC)], row.names = TRUE, caption = "Mapping of fleet codes from the IOTC database to the code list used for the FIRMS Global Tuna Atlas when the source and target codes differ")
+```
+

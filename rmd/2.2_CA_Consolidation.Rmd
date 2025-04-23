@@ -1,0 +1,31 @@
+```{r Fields_Addition_Formatting, echo = TRUE}
+# Add source authority
+CA_RAW[, `:=` (source_authority = "IOTC")]
+
+# Add fishing mode (to be removed in future exports)
+CA_RAW[, `:=` (fishing_mode = fifelse(CATCH_SCHOOL_TYPE_CODE == "LA", "LS",
+                                         fifelse(CATCH_SCHOOL_TYPE_CODE == "UNCL", "UNK", 
+                                                 fifelse(CATCH_SCHOOL_TYPE_CODE == "FD", "DEL",
+                                                         CATCH_SCHOOL_TYPE_CODE))))]
+
+# Set catch units
+CA_RAW[CATCH_UNIT_CODE == "MT", CATCH_UNIT_CODE := "t"]
+CA_RAW[CATCH_UNIT_CODE == "NO", CATCH_UNIT_CODE := "no"]
+
+# Add unit
+CA_RAW[, `:=` (unit = CATCH_UNIT_CODE)]
+
+# Add measurements fields
+CA_RAW[, `:=` (measurement = "catch", measurement_type = "NC")]
+
+# Add measurement observation
+CA_RAW[, `:=` (measurement_obs = fifelse(RAISE_CODE == "OS", "original sample", 
+                                              fifelse(RAISE_CODE == "SD", "raised", "unknown")))]
+
+# Add time_start
+CA_RAW[, `:=` (time_start = as.character(as.Date(paste(YEAR, "-", MONTH_START, "-01", sep = ""), format = "%Y-%m-%d")))]
+
+# Add time_end
+CA_RAW[, `:=` (time_end = as.character(as.Date(paste(YEAR, "-", MONTH_END, "-01", sep = ""), format = "%Y-%m-%d") %m+% months(1) - 1))]
+```
+

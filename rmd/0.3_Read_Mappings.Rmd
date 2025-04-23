@@ -1,0 +1,16 @@
+```{r ReadMappingFiles, echo = TRUE}
+# Species mapping
+MAPPING_SPECIES_RAW = fread("../inputs/mappings/codelist_mapping_species_iotc_species_asfis.csv")
+
+MAPPING_SPECIES = merge(MAPPING_SPECIES_RAW, SPECIES[, .(code, definition, name_en)], by.x = "trg_code", by.y = "code")
+
+# Gear mapping
+MAPPING_GEAR_RAW = fread("../inputs/mappings/codelist_mapping_gear_iotc_isscfg_revision_1.csv", colClasses = "character")
+
+MAPPING_GEAR = merge(MAPPING_GEAR_RAW, GEARS[, -c("definition", "label_en")], by.x = "trg_code", by.y = "code")
+
+# Fleet mapping
+MAPPING_FLEET_RAW = fread("../inputs/mappings/codelist_mapping_flag_iotc_fishingfleet_firms.csv", colClasses = "character")
+
+MAPPING_FLEET = merge(MAPPING_FLEET_RAW, FLEETS[, .(code, label)], by.x = "trg_code", by.y = "code", all.x = TRUE)
+``` 

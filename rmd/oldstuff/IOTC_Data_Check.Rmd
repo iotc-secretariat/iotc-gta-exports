@@ -1,0 +1,517 @@
+---
+title: "Global Tuna Atlas data flow: Checking the IOTC data"
+author: "IOTC Secretariat"
+classoption: landscape
+header-includes:
+- \usepackage[justification=raggedright,labelfont=bf,singlelinecheck=false]{caption}   #left align caption of kables
+---
+  
+```{r libs,echo=FALSE,results="hide",include=FALSE}
+pacman::p_load("knitr", "openxlsx", "lubridate", "iotc.base.common.data")
+```
+
+```{r general_options,echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, tidy.opts = list(width.cutoff = 60), tidy = TRUE,size = "small")
+```
+
+```{r ReadCodeLists,cache=TRUE}
+Species = fread("../inputs/codelists/species_asfis.csv", encoding = "UTF-8")
+FishingEntities = fread("../inputs/codelists/flag_fao_cwp.csv", encoding = "UTF-8")
+Gears = fread("../inputs/codelists/isscfg_revision_1.csv", colClasses = "character", encoding = "UTF-8")
+```
+
+```{r ReadMappingFiles}
+MappingFlag = fread("../inputs/mappings/codelist_mapping_flag_iotc_flag_fao_cwp.csv")
+MappingSpecies = fread("../inputs/mappings/codelist_mapping_species_iotc_species_asfis.csv")
+MappingGear = fread("../inputs/mappings/codelist_mapping_gear_iotc_isscfg_revision_1.csv", colClasses = "character")[order(src_code)]
+```
+
+```{r ExtractIOTCgrids}
+IOTCGrids = filter_grids()
+```
+
+```{r ReadInputNC, cache = TRUE}
+InputNC = data.table(read.xlsx("../inputs/datasets/IOTC/IOTC-DATASETS-NCDB.xlsx", sheet = "Catches_Captures"))
+InputNC[, `:=` (FlCde = trimws(FlCde), GrCde = trimws(GrCde), SpCde = trimws(SpCde))]
+```
+
+```{r ReadOutputNC, cache = TRUE}
+# Pre-harmonized}
+OutputPHNC = fread("../datasets/nominal_catch_iotc_level0.csv")
+OutputPHNC[, `:=` (year_start = year(time_start), year_end = year(time_end))]
+
+# Fully harmonized
+OutputFHNC = fread("../datasets/global_nominal_catch_firms_level0.csv")[source_authority == "IOTC"]
+OutputFHNC[, `:=` (year_start = year(time_start), year_end = year(time_end))]
+```
+
+```{r ReadInputsCECoastal, include = FALSE, warning = FALSE}
+InputCECoastalRaw = fread("../inputs/datasets/IOTC/IOTC-DATASETS-CECoastal.csv")
+InputCECoastalRaw[, `:=` (Fleet = trimws(Fleet), iGrid = trimws(iGrid))]
+
+# Create data set of catch in number
+NOCatchCols = paste0(grep("NO", names(InputCECoastalRaw),value = TRUE), sep = "")
+NOCols = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source", NOCatchCols)
+InputNOCoastal = InputCECoastalRaw[,..NOCols]
+InputNOCoastal[, `:=` (`FRZ-NO`= as.numeric(`FRZ-NO`), `KAW-NO` = as.numeric(`KAW-NO`))]
+TableInputNOCoastal = melt.data.table(InputNOCoastal, id.vars = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source"), measure.vars = paste0(grep("NO", names(InputNOCoastal), value = TRUE)), variable.name = "Species", value.name = "Catch", na.rm = TRUE)
+TableInputNOCoastal[, Species := gsub("-NO", "", Species)]
+
+# Create data set of catch in weight
+MTCatchCols = paste0(grep("MT", names(InputCECoastalRaw), value = TRUE), sep="")
+MTCols = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source", MTCatchCols)
+InputMTCoastal = InputCECoastalRaw[,..MTCols]
+TableInputMTCoastal = melt.data.table(InputMTCoastal,id.vars = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source"), measure.vars = paste0(grep("MT", names(InputMTCoastal),value = TRUE)),variable.name = "Species", value.name = "Catch", na.rm = TRUE)
+TableInputMTCoastal[, Species := gsub("-MT","",Species)]
+```
+
+```{r ReadOutputsCECoastal, cache = TRUE, include = FALSE}
+OutputCECoastal = fread("../datasets/catch_iotc_level0__coastal.csv")
+OutputCECoastal[, `:=` (year_start = year(time_start), year_end = year(time_end))]
+OutputCECoastal[, `:=` (year_month_start = format(time_start, "%Y-%m"), year_month_end = format(time_end, "%Y-%m"))]
+```
+
+```{r ReadInputsCELongline, cache = TRUE, include = FALSE}
+InputCELonglineRaw = fread("../inputs/datasets/IOTC/IOTC-DATASETS-CELongline.csv")
+InputCELonglineRaw[, `:=` (Fleet = trimws(Fleet), iGrid = trimws(iGrid))]
+
+# Create data set of catch by number
+NOCatchCols = paste0(grep("NO", names(InputCELonglineRaw), value = TRUE),sep="")
+NOCols = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source", NOCatchCols)
+InputNOLongline = InputCELonglineRaw[,..NOCols]
+TableInputNOLongline = melt.data.table(InputNOLongline,id.vars = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source"), measure.vars = paste0(grep("NO", names(InputNOLongline),value = TRUE)),variable.name = "Species", value.name = "Catch", na.rm = TRUE)
+TableInputNOLongline[, Species := gsub("-NO", "", Species)]
+
+# Create data set of catch by weight
+MTCatchCols = paste0(grep("MT", names(InputCELonglineRaw), value = TRUE), sep="")
+MTCols = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source", MTCatchCols)
+InputMTLongline = InputCELonglineRaw[,..MTCols]
+TableInputMTLongline = melt.data.table(InputMTLongline,id.vars = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source"), measure.vars = paste0(grep("MT", names(InputMTLongline), value = TRUE)),variable.name = "Species", value.name = "Catch", na.rm = TRUE)
+TableInputMTLongline[, Species := gsub("-MT", "", Species)]
+```
+
+```{r ReadOutputsCELongline, cache = TRUE, include = FALSE}
+OutputCELongline = fread("../datasets/catch_ll_iotc_level0.csv")
+OutputCELongline[, `:=` (year_start = year(time_start), year_end = year(time_end))]
+OutputCELongline[, `:=` (year_month_start = format(time_start, "%Y-%m"), year_month_end = format(time_end, "%Y-%m"))]
+```
+
+```{r ReadInputsCESurface, include = FALSE}
+InputCESurfaceRaw = fread("../inputs/datasets/IOTC/IOTC-DATASETS-CESurface.csv", strip.white = TRUE)
+InputCESurfaceRaw[, `:=` (Fleet = trimws(Fleet), iGrid = trimws(iGrid))]
+
+# Create data set of LS catch (in weight)
+LSCatchCols = paste0(grep("LS", names(InputCESurfaceRaw), value = TRUE), sep="")
+LSCols = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source", LSCatchCols)
+InputLSSurface = InputCESurfaceRaw[,..LSCols]
+
+TableInputLSSurface = melt.data.table(InputLSSurface,id.vars = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source"), measure.vars = paste0(grep("LS", names(InputLSSurface),value = TRUE)), variable.name = "Species", value.name = "Catch", na.rm = TRUE)
+TableInputLSSurface[, Species := gsub("-LS", "", Species)]
+
+# Create data set of FS catch (in weight)
+FSCatchCols = paste0(grep("FS", names(InputCESurfaceRaw), value = TRUE), sep="")
+FSCols = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source", FSCatchCols)
+InputFSSurface = InputCESurfaceRaw[,..FSCols]
+
+TableInputFSSurface = melt.data.table(InputFSSurface,id.vars = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source"), measure.vars = paste0(grep("FS", names(InputFSSurface), value = TRUE)), variable.name = "Species", value.name = "Catch", na.rm = TRUE)
+TableInputFSSurface[, Species := gsub("-FS", "", Species)]
+
+# Create data set of UNCL catch (in weight)
+UNCLCatchCols = paste0(grep("UNCL", names(InputCESurfaceRaw), value = TRUE), sep="")
+UNCLCols = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source", UNCLCatchCols)
+InputUNCLSurface = InputCESurfaceRaw[, ..UNCLCols]
+
+TableInputUNCLSurface = melt.data.table(InputUNCLSurface, id.vars = c("Fleet", "Gear", "Year", "MonthStart", "MonthEnd", "iGrid", "Grid", "QualityCode", "Source"), measure.vars = paste0(grep("UNCL", names(InputUNCLSurface), value = TRUE)), variable.name = "Species", value.name = "Catch", na.rm = TRUE)
+TableInputUNCLSurface[, Species := gsub("-UNCL", "", Species)]
+```
+
+```{r BuildInputCE_NO_MT, cache = TRUE, include = FALSE}
+TableInputNO = rbindlist(list(TableInputNOCoastal, TableInputNOLongline))
+TableInputMT = rbindlist(list(TableInputMTCoastal, TableInputMTLongline, TableInputFSSurface, TableInputLSSurface, TableInputUNCLSurface))
+```
+
+```{r BuildInputCE_NO_5x5, include = FALSE}
+# TableInputNO
+gridTableInputNO = data.table(Grid = as.character(sort(unique(TableInputNO$Grid))))
+
+# Define grids included in the Indian Ocean for 1x1 and 5x5 grids only
+MappedGridsN0 = merge(gridTableInputNO, IOTCGrids, by.x = "Grid", by.y = "FISHING_GROUND_CODE")[substr(Grid, 1, 1)>4]
+
+# Define grids not included in the Indian Ocean or for resolution larger than 5x5
+UnmappedGridsNO = gridTableInputNO[!Grid %in% MappedGridsN0$Grid,Grid]
+
+# Mapping with the 5x5 grid
+gridTableInputNO[Grid %in% MappedGridsN0$Grid, Grid5x5 := sapply(Grid, USE.NAMES = FALSE, convert_CWP_grid, target_grid_type_code = grid_5x5)]
+
+# Add 5x5 grid to initial data set and remove unmapped grids
+TableInputNO[, Grid := as.character(Grid)]
+
+TableInputNO_5x5 = merge(TableInputNO, gridTableInputNO, by.x = "Grid", by.y = "Grid", all.x = TRUE)[,.(Catch=sum(Catch)),by=.(Year, MonthStart, MonthEnd, Grid, Grid5x5, Fleet, Gear, Species)]
+
+# Compute percentage of catch removed from mapping and filtering process
+NO_5x5_CatchLost = sum(TableInputNO[Grid %in% UnmappedGridsNO, Catch])
+NO_5x5_PercentCatchLost = round(sum(TableInputNO[Grid %in% UnmappedGridsNO,Catch])/sum(TableInputNO$Catch)*100,4)
+```
+
+```{r BuildInputCE_MT_5x5, include = FALSE}
+# TableInputMT
+gridTableInputMT = data.table(Grid=as.character(sort(unique(TableInputMT$Grid))))
+
+# Define grids included in the Indian Ocean and for 1x1 and 5x5 grids only
+MappedGridsMT = merge(gridTableInputMT,IOTCGrids, by.x = "Grid", by.y = "FISHING_GROUND_CODE")[substr(Grid,1,1)>4]
+
+# Define grids not included in the Indian Ocean or for resolution larger than 5x5
+UnmappedGridsMT = gridTableInputMT[!Grid %in% MappedGridsMT$Grid,Grid]
+
+# Mapping with the 5x5 grid
+gridTableInputMT[Grid %in% MappedGridsMT$Grid, Grid5x5 := sapply(Grid, USE.NAMES = FALSE, convert_CWP_grid, target_grid_type_code = grid_5x5)]
+
+# Add 5x5 grid to initial data set and remove unmapped grids
+TableInputMT[, Grid := as.character(Grid)]
+
+TableInputMT_5x5 = merge(TableInputMT, gridTableInputMT, by.x = "Grid", by.y = "Grid", all.x = TRUE)[,.(Catch=sum(Catch)),by=.(Year, MonthStart, MonthEnd, Grid, Grid5x5, Fleet, Gear, Species)]
+
+# Compute percentage of catch removed from mapping and filtering process
+MT_5x5_CatchLost = sum(TableInputMT[Grid %in% UnmappedGridsMT, Catch])
+MT_5x5_PercentCatchLost = round(sum(TableInputMT[Grid %in% UnmappedGridsMT,Catch])/sum(TableInputMT$Catch)*100,4)
+```
+
+```{r ReadOutputsCESurface, cache = TRUE, include = FALSE}
+OutputCESurface = fread("../datasets/catch_iotc_level0__surface.csv")
+OutputCESurface[, `:=` (year_start=year(time_start),year_end=year(time_end))]
+OutputCESurface[, `:=` (year_month_start=format(time_start, "%Y-%m"),year_month_end=format(time_end, "%Y-%m"))]
+```
+
+```{r ReadFinalOutputs, cache = TRUE, include = FALSE}
+# global level 0, with all grids
+OutputCEFIRMS = fread("../datasets/global_catch_firms_level0.csv",colClasses = c("character", "character", "IDate", "IDate", "character", "character", "character", "character", "character", "character", "numeric"))[source_authority == "IOTC"]
+OutputCEFIRMS[, `:=` (year_start = year(time_start), year_end = year(time_end))]
+OutputCEFIRMS[, `:=` (year_month_start = format(time_start, "%Y-%m"), year_month_end = format(time_end, "%Y-%m"))]
+
+# surface fisheries
+OutputCEFIRMSurface = fread("../datasets/global_catch_1deg_1m_ps_bb_firms_level0.csv", colClasses = c("character", "character", "IDate", "IDate", "character", "character", "character", "character", "character", "character", "numeric"))[source_authority == "IOTC"]
+OutputCEFIRMSurface[, `:=` (year_start = year(time_start), year_end=year(time_end))]
+OutputCEFIRMSurface[, `:=` (year_month_start = format(time_start, "%Y-%m"), year_month_end=format(time_end, "%Y-%m"))]
+
+# 5x5 degree-month
+OutputCEFIRMS_5deg = fread("../datasets/global_catch_5deg_1m_firms_level0.csv", colClasses = c("character", "character", "IDate", "IDate", "character", "character", "character", "character", "character", "character", "numeric"))[source_authority == "IOTC"]
+OutputCEFIRMS_5deg[, `:=` (year_start = year(time_start),year_end=year(time_end))]
+OutputCEFIRMS_5deg[, `:=` (year_month_start = format(time_start, "%Y-%m"),year_month_end= format(time_end, "%Y-%m"))]
+```
+
+\pagebreak
+
+# Summary {-}
+
+The document compares the versions of the IOTC data sets at different steps of the Tuna Atlas workflow: (i) as provided by the IOTC Secretariat, (ii) after the pre-harmonization process, and (iii) after the full-harmonization process with respect to structure and CWP standards as included in the global level-0 data sets.
+
+For **nominal catches**, the pre-harmonization process conserves all IOTC data as submitted (nominal_catch_iotc_level0.csv). The second step of harmonization process generating the final nominal catch data set (global_nominal_catch_firms_level0.csv) removes the data of southern bluefin tuna (_Thunnus maccoyii_; SBF) and modifies the data set in several ways:
+
+1. First, the mapping of the original flags with the ISO-3 country codes results in the removal of 16 flags and the addition of 10 new ones, including the combination of GBR and GBRT under EUGBR and FRA and FRAT under EUFRA. Those are different CPCs for the IOTC and they cannot be merged together. The issue is currently being addressed by proposing a more flexible FLEET code combining the CPC and the CPC flag when needed, e.g. EUFRA for FRA. The mapping of the flags also results in the grouping of all NEI fleets in one single NEI entity. It is to note there was a mistake in the initial mapping and the code TMP (East Timor) should be converted to TLS (Timor Leste).
+
+2. Second, a total of 41 species not present in the ASFIS code list are removed from the data set while 2 are added: "HAY|Lined catshark" and "HXW|Frilled and cow sharks" in place of the outdated IOTC codes SHBC and SHCW, respectively. The species mapping with ASFIS has now been fully revised. The species code UNK regroups all species not mapped with the ASFIS code list and increased over time to exceed 80,000 t in 2019. 
+
+3. Third, the initial mapping of the gears with ISSCFG did not include 3 fishing gears: set longline (LLF), rod and reel (RR), and trotline (TROT). As LLF and TROT were only used to report catches of SBF, they were removed from the fully harmonized data set. The gear code UNK was created to host the unmapped gears and only included RR which could be mapped with the ISSCFG code LHP (Handlines and hand-operated pole-and-lines; 09.1) for future data sets.
+
+For **geo-references catches**, the pre-harmonization process conserves all the data included in the three distinct catch-effort data sets available from IOTC, i.e. for coastal (catch_iotc_level0__coastal.csv), surface (catch_iotc_level0__surface.csv), and longline fisheries (catch_ll_iotc_level0.csv). For the final data sets:
+
+1. _global_catch_firms_level0._ The data set conserves all catches in numbers and weights of fish, except for SBF which is removed from the data.
+
+2. _global_catch_1deg_1m_ps_bb_firms_level0._ 
+
++ The LS component of the data set conserves all catch of fish;
++ The FS component of the data set conserves all catch of fish except for SBF and 349 t of ALB and SKJ;
++ There seems to be an error for the UNCL component of the data set which only covers the period 1994-2019. The reason seems to be that the FIRMS data set does not include _all irregular grids_ of baitboat catches although the corresponding 1x1 grids are available for most grids.
+
+3. _global_catch_5deg_1m_firms_level0._ The data set includes about 20,000 t more catches than the original IOTC data set, corresponding to 0.008% of total catches. Also, the geographic identifier in the data set is not restricted to 5x5 square grids and includes some irregular grids (e.g. IRNHS), suggesting a possible error in the processing by using the column iGrid instead of Grid.
+
+\pagebreak
+
+# Nominal catches
+
+## Data sets main features
+
+**Table 1:** Description of the nominal catch data sets provided by the IOTC Secretariat (Input), pre-harmonized (Output 1) and fully harmonized (Output 2) in the Global Tuna Atlas data flow
+
+| Variable | Input | Output 1 | Output 2 |
+| :----------------------------- | :-----------------------: | :-----------------: | :-----------------------: |
+| Year period | `r paste(min(InputNC$"Year/An"), max(InputNC$"Year/An"), sep = "-")` | `r paste(min(OutputPHNC$year_start), max(OutputPHNC$year_start), sep = "-")` | `r paste(min(OutputFHNC$year_start), max(OutputFHNC$year_start), sep = "-")` |
+| Number of years | `r length(unique(InputNC$"Year/An"))` | `r length(unique(OutputPHNC$year_start))` | `r length(unique(OutputFHNC$year_start))` |
+| Number of fishing entities | `r length(unique(InputNC$FlCde))` | `r length(unique(OutputPHNC$flag))` | `r length(unique(OutputFHNC$flag))` |
+| Number of species | `r length(unique(InputNC$SpCde))` | `r length(unique(OutputPHNC$species))` | `r length(unique(OutputFHNC$species))` |
+| Number of gears | `r length(unique(InputNC$GrCde))` | `r length(unique(OutputPHNC$gear))` | `r length(unique(OutputFHNC$gear))` |
+| Number of school types | N/A | `r length(unique(OutputPHNC$schooltype))` | N/A | 
+| Number of units for the catch | N/A | `r length(unique(OutputPHNC$unit))` | `r length(unique(OutputFHNC$unit))` | 
+| Total catch (t) | `r prettyNum(sum(InputNC$"Catch/Capture(t)"), big.mark = ",")` | `r prettyNum(sum(OutputPHNC$value), big.mark = ",")` | `r prettyNum(sum(OutputFHNC$value), big.mark = ",")` |
+
+\pagebreak
+
+## Initial mapping
+
+```{r CheckingInitialMapping}
+MissingFlags = merge(unique(InputNC[,.(FlCde,Fleet)]), MappingFlag, by.x = "FlCde", by.y = "src_code", all.x = TRUE)[is.na(trg_code)][order(FlCde)]
+MissingGears = merge(unique(InputNC[,.(GrCde,Gear)]), MappingGear, by.x = "GrCde", by.y = "src_code", all.x = TRUE)[is.na(trg_code), .(GrCde, Gear)][order(GrCde)]
+MissingSpecies = merge(unique(InputNC[,.(SpCde,Species)]), MappingSpecies, by.x = "SpCde", by.y = "src_code", all.x = TRUE)[is.na(trg_code), .(SpCde, Species)][order(SpCde)]
+```
+
+```{r DisplayMissingFlags}
+if(nrow(MissingFlags)>0)
+  kable(MissingFlags, row.names = TRUE, caption = "Fleets not included in the initial mapping of the Global Tuna Atlas data flow")
+```
+
+```{r DisplayMissingGears}
+if(nrow(MissingGears)>0)
+  kable(MissingGears, row.names = TRUE, caption = "Gears not included in the initial mapping of the Global Tuna Atlas data flow")
+```
+
+```{r DisplayMissingSpecies}
+if(nrow(MissingSpecies)>0)
+  kable(MissingSpecies, row.names = TRUE, caption = "Species not included in the initial mapping of the Global Tuna Atlas data flow")
+```
+
+## Harmonized data sets
+
+```{r Differences_fishing_entities_NC_inputs_outputs}
+# Step 1: Inputs -> PH outputs
+FishingEntitiesNC_input_ph = merge(unique(OutputPHNC[,.(flag)]), unique(InputNC[,.(FlCde,Fleet)]), by.x = "flag", by.y = "FlCde", all = TRUE)
+# Step 2: PH outputs -> FH outputs
+FishingEntitiesNC_ph_fh = merge(unique(OutputPHNC[,.(flag, source_authority)]), unique(OutputFHNC[,.(flag, source_authority)]), by.x = "flag", by.y = "flag", all = TRUE, suffixes = c("_ph","_fh"))
+
+# Fishing entities present in the pre-harmonized data set and not in the fully harmonized one
+FishingEntitiesNC_Removed = FishingEntitiesNC_ph_fh[!is.na(source_authority_ph) & is.na(source_authority_fh), .(flag)]
+
+# Fishing entities not present in the pre-harmonized data set and present in the fully harmonized one
+FishingEntitiesNC_Added = FishingEntitiesNC_ph_fh[is.na(source_authority_ph) & !is.na(source_authority_fh), .(flag)]
+```
+
+```{r DisplayFishingEntitiesNCRemoved, results = "asis"}
+kable(FishingEntitiesNC_Removed, caption = "List of fishing entities renamed through the mapping process of the Global Tuna Atlas data flow, i.e. from the input data sets to the fully harmonized nominal catch data set", row.names = TRUE)
+```
+
+```{r DisplayFishingEntitiesNCAdded, results = "asis"}
+kable(FishingEntitiesNC_Added, caption = "List of fishing entities added through the mapping process of the Global Tuna Atlas data flow, i.e. from the input data sets to the fully harmonized nominal catch data set", row.names = TRUE)
+```
+
+```{r DifferencesIONC_species}
+ListPHNCSpecies = sort(unique(OutputPHNC$species))
+ListFHNCSpecies = sort(unique(OutputFHNC$species))
+
+SpeciesNC_Common = ListFHNCSpecies[ListFHNCSpecies %in% ListPHNCSpecies]
+SpeciesNC_Removed = ListPHNCSpecies[!(ListPHNCSpecies %in% ListFHNCSpecies)]
+SpeciesNC_Added = ListFHNCSpecies[!(ListFHNCSpecies %in% ListPHNCSpecies)]
+```
+
+```{r DisplaySpeciesNCRemoved, results = "asis"}
+kable(unique(InputNC[SpCde %in% SpeciesNC_Removed, .(SpeciesCode=SpCde,SpeciesEnglishName = Species,SpeciesLatinName = paste("_", SpLat, "_", sep = ""))][order(SpeciesCode)]), row.names = TRUE, caption = "List of species renamed through the mapping process of the Global Tuna Atlas data flow, i.e. from the input data sets to the fully harmonized nominal catch data set")
+```
+
+```{r DisplaySpeciesNCAdded, results = "asis"}
+kable(Species[code %in% SpeciesNC_Added, .(SpeciesCode=code,SpeciesEnglishName = label, SpeciesLatinName = paste("_", scientific_name, "_", sep = ""))], caption = "List of species added through the mapping process of the Global Tuna Atlas data flow, i.e. from the input data sets to the fully harmonized nominal catch data set", row.names = TRUE)
+```
+
+\pagebreak
+
+```{r DifferencesIONC_gears}
+# Pr-harmonized data set
+ListPHNCGears = data.table(GearCode = sort(unique(OutputPHNC$gear)))
+PHNCGears = merge(ListPHNCGears,MappingGear, by.x = "GearCode", by.y = "src_code", all.x = TRUE)
+GearsNC_Common_PH = unique(InputNC[GrCde %in% PHNCGears[!is.na(trg_code), GearCode], .(GrCde, Gear)])
+GearsNC_Removed_PH = unique(InputNC[!GrCde %in% PHNCGears[!is.na(trg_code), GearCode], .(GrCde, Gear)])
+
+# Fully harmonized data set
+ListFHNCGear = data.table(GearCode = sort(unique(OutputFHNC$gear)))
+FHNCGear = merge(ListFHNCGear,Gears, by.x = "GearCode", by.y = "code", all.x=TRUE)
+GearsNC_Common_FH = FHNCGear[!is.na(label), .(GearCode, GearEnglishName = label)]
+```
+
+```{r DisplayGearsNCRemoved, results = "asis"}
+kable(unique(InputNC[GrCde %in% GearsNC_Removed_PH$GrCde,.(GearCode=GrCde,GearEnglishName=Gear)]), caption = "List of fishing gears renamed or removed through the mapping process of the Global Tuna Atlas data flow, i.e. from the input data sets to the fully harmonized nominal catch data set", row.names = TRUE)
+```
+
+\newpage
+
+# Pre-harmonized geo-referenced data sets of catch
+
+## Coastal fisheries
+
+**Table 9:** Comparison between the original (Input) and pre-harmonized (Output 1) geo-referenced data set of Indian Ocean coastal fisheries catches
+
+| Variable | Input | Output 1 |
+| :----------------------------- | :-----------------------: | :-----------------: |
+| **CATCH IN NUMBER** | |
+| Year period | `r paste(min(TableInputNOCoastal$Year),max(TableInputNOCoastal$Year), sep = "-")` | `r paste(min(OutputCECoastal[unit %in% c("NO", "NOMT"), year_start]),max(OutputCECoastal[unit %in% c("NO", "NOMT"), year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputNOCoastal$Year, TableInputNOCoastal$MonthStart, sep = "-")))` | `r length(unique(OutputCECoastal[unit %in% c("NO", "NOMT") , year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputNOCoastal$iGrid))`  | `r length(unique(OutputCECoastal[unit %in% c("NO", "NOMT"), geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputNOCoastal$Fleet))` | `r length(unique(OutputCECoastal[unit %in% c("NO", "NOMT"), flag]))` |
+| Number of species | `r length(unique(TableInputNOCoastal$Species))` |  `r length(unique(OutputCECoastal[unit %in% c("NO", "NOMT"), species]))` |
+| Number of gears | `r length(unique(TableInputNOCoastal$Gear))` | `r length(unique(OutputCECoastal[unit %in% c("NO", "NOMT"), gear]))` |
+| Total catch (number) | `r prettyNum(sum(TableInputNOCoastal$Catch, na.rm = TRUE), big.mark = ",")` | `r prettyNum(sum(OutputCECoastal[unit %in% c("NO", "NOMT"), value]), big.mark = ",")` |
+| **CATCH IN WEIGHT** | | |
+| Year period | `r paste(min(TableInputMTCoastal$Year), max(TableInputMTCoastal$Year), sep = "-")` | `r paste(min(OutputCECoastal[unit %in%  c("MT", "MTNO"), year_start]), max(OutputCECoastal[unit %in% c("MT", "MTNO"), year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputMTCoastal$Year, TableInputMTCoastal$MonthStart, sep = "-")))` | `r length(unique(OutputCECoastal[unit %in% c("MT", "MTNO"), year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputMTCoastal$iGrid))`  | `r length(unique(OutputCECoastal[unit %in% c("MT", "MTNO"), geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputMTCoastal$Fleet))` | `r length(unique(OutputCECoastal[unit %in% c("MT", "MTNO"), flag]))` |
+| Number of species | `r length(unique(TableInputMTCoastal$Species))` |  `r length(unique(OutputCECoastal[unit %in% c("MT", "MTNO"), species]))` |
+| Number of gears | `r length(unique(TableInputMTCoastal$Gear))` | `r length(unique(OutputCECoastal[unit %in% c("MT", "MTNO"), gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputMTCoastal$Catch, na.rm = TRUE), big.mark = ",")` | `r prettyNum(sum(OutputCECoastal[unit %in% c("MT", "MTNO"), value]), big.mark = ",")` |
+
+## Longline fisheries
+
+**Table 10:** Comparison between the original (Input) and pre-harmonized (Output 1) geo-referenced data set of Indian Ocean longline fisheries catches
+
+| Variable | Input | Output 1 |
+| :----------------------------- | :-----------------------: | :-----------------: |
+| **CATCH IN NUMBER** | |
+| Year period | `r paste(min(TableInputNOLongline$Year), max(TableInputNOLongline$Year), sep = "-")` | `r paste(min(OutputCELongline[unit %in% c("NO", "NOMT"), year_start]), max(OutputCELongline[unit %in% c("NO", "NOMT"), year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputNOLongline$Year, TableInputNOLongline$MonthStart, sep = "-")))` | `r length(unique(OutputCELongline[unit %in% c("NO", "NOMT"), year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputNOLongline$iGrid))`  | `r length(unique(OutputCELongline[unit %in% c("NO", "NOMT"), geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputNOLongline$Fleet))` | `r length(unique(OutputCELongline[unit %in% c("NO", "NOMT"), flag]))` |
+| Number of species | `r length(unique(TableInputNOLongline$Species))` |  `r length(unique(OutputCELongline[unit %in% c("NO", "NOMT"), species]))` |
+| Number of gears | `r length(unique(TableInputNOLongline$Gear))` | `r length(unique(OutputCELongline[unit %in% c("NO", "NOMT"), gear]))` |
+| Total catch (number) | `r prettyNum(sum(TableInputNOLongline$Catch, na.rm=TRUE), big.mark = ",")` | `r prettyNum(sum(OutputCELongline[unit %in% c("NO", "NOMT"),value]), big.mark = ",")` |
+| **CATCH IN WEIGHT** | | |
+| Year period | `r paste(min(TableInputMTLongline$Year), max(TableInputMTLongline$Year), sep = "-")` | `r paste(min(OutputCELongline[unit %in%  c("MT", "MTNO"), year_start]), max(OutputCELongline[unit %in% c("MT", "MTNO"), year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputMTLongline$Year, TableInputMTLongline$MonthStart, sep = "-")))` | `r length(unique(OutputCELongline[unit %in% c("MT", "MTNO"), year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputMTLongline$iGrid))`  | `r length(unique(OutputCELongline[unit %in% c("MT", "MTNO"), geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputMTLongline$Fleet))` | `r length(unique(OutputCELongline[unit %in% c("MT", "MTNO"), flag]))` |
+| Number of species | `r length(unique(TableInputMTLongline$Species))` |  `r length(unique(OutputCELongline[unit %in% c("MT", "MTNO"), species]))` |
+| Number of gears | `r length(unique(TableInputMTLongline$Gear))` | `r length(unique(OutputCELongline[unit %in% c("MT", "MTNO"), gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputMTLongline$Catch,na.rm=T), big.mark = ",")` | `r prettyNum(sum(OutputCELongline[unit %in% c("MT", "MTNO"), value]), big.mark = ",")` |
+
+## Surface fisheries
+
+**Table 11:** Comparison between the original (Input) and pre-harmonized (Output 1) geo-referenced data sets of Indian Ocean surface (purse seine and baitboat) fisheries catches
+
+| Variable | Input | Output 1 |
+| :----------------------------- | :-----------------------: | :-----------------: |
+| **LS CATCH IN WEIGHT** | |
+| Year period | `r paste(min(TableInputLSSurface$Year), max(TableInputLSSurface$Year), sep = "-")` | `r paste(min(OutputCESurface[schooltype == "LS", year_start]), max(OutputCESurface[schooltype == "LS", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputLSSurface$Year, TableInputLSSurface$MonthStart, sep = "-")))` | `r length(unique(OutputCESurface[schooltype == "LS", year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputLSSurface$iGrid))`  | `r length(unique(OutputCESurface[schooltype == "LS", geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputLSSurface$Fleet))` | `r length(unique(OutputCESurface[schooltype == "LS", flag]))` |
+| Number of species | `r length(unique(TableInputLSSurface$Species))` |  `r length(unique(OutputCESurface[schooltype == "LS", species]))` |
+| Number of gears | `r length(unique(TableInputLSSurface$Gear))` | `r length(unique(OutputCESurface[schooltype == "LS", gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputLSSurface$Catch, na.rm = TRUE), big.mark = ",")`| `r prettyNum(sum(OutputCESurface[schooltype == "LS", value]), big.mark = ",")` |
+| **FS CATCH IN WEIGHT** | | |
+| Year period | `r paste(min(TableInputFSSurface$Year), max(TableInputFSSurface$Year), sep = "-")` | `r paste(min(OutputCESurface[schooltype == "FS", year_start]), max(OutputCESurface[schooltype == "FS", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputFSSurface$Year, TableInputFSSurface$MonthStart, sep = "-")))` | `r length(unique(OutputCESurface[schooltype == "FS", year_month_start]))` ||
+| Number of spatial strata | `r length(unique(TableInputFSSurface$iGrid))`  | `r length(unique(OutputCESurface[schooltype == "FS", geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputFSSurface$Fleet))` | `r length(unique(OutputCESurface[schooltype == "FS", flag]))` |
+| Number of species | `r length(unique(TableInputFSSurface$Species))` |  `r length(unique(OutputCESurface[schooltype == "FS", species]))` |
+| Number of gears | `r length(unique(TableInputFSSurface$Gear))` | `r length(unique(OutputCESurface[schooltype == "FS", gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputFSSurface$Catch, na.rm = TRUE), big.mark = ",")`| `r prettyNum(sum(OutputCESurface[schooltype == "FS", value]), big.mark = ",")` |
+| **UNCL CATCH IN WEIGHT** | | |
+| Year period | `r paste(min(TableInputUNCLSurface$Year), max(TableInputUNCLSurface$Year), sep = "-")` | `r paste(min(OutputCESurface[schooltype == "UNCL", year_start]), max(OutputCESurface[schooltype == "UNCL", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputUNCLSurface$Year, TableInputUNCLSurface$MonthStart, sep = "-")))` | `r length(unique(OutputCESurface[schooltype == "UNCL", year_month_start]))` |
+| Number of spatial strata (CWP grids) | `r length(unique(TableInputUNCLSurface$iGrid))`  | `r length(unique(OutputCESurface[schooltype == "UNCL", geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputUNCLSurface$Fleet))` | `r length(unique(OutputCESurface[schooltype == "UNCL", flag]))` |
+| Number of species | `r length(unique(TableInputUNCLSurface$Species))` |  `r length(unique(OutputCESurface[schooltype == "UNCL", species]))` |
+| Number of gears | `r length(unique(TableInputUNCLSurface$Gear))` | `r length(unique(OutputCESurface[schooltype == "UNCL", gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputUNCLSurface$Catch, na.rm = TRUE), big.mark = ",")`| `r prettyNum(sum(OutputCESurface[schooltype == "UNCL", value]), big.mark = ",")` |
+
+\pagebreak
+
+# Fully harmonized data sets
+
+## Data set "global_catch_firms_level0"
+
+**Table 12:** Comparison between the original (Input) and fully harmonized (Output 2) geo-referenced data set of all Indian Ocean fisheries catches. Input-SBF describes the input data for southern bluefin tuna (SBF)
+
+| Variable | Input | Input-SBF | Output 2 |
+| :----------------------------- | :-----------------------: | :-----------------------: |:-----------------: |
+| **CATCH IN NUMBER** | | | |
+| Year period | `r paste(min(TableInputNO$Year),max(TableInputNO$Year), sep = "-")` | `r paste(min(TableInputNO[Species == "SBF", Year]),max(TableInputNO[Species == "SBF", Year]), sep = "-")` | `r paste(min(OutputCEFIRMS[unit == "no", year_start]), max(OutputCEFIRMS[unit == "no", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputNO$Year, TableInputNO$MonthStart, sep = "-")))` | `r length(unique(paste(TableInputNO[Species == "SBF", Year], TableInputNO[Species == "SBF", MonthStart], sep = "-")))` | `r length(unique(OutputCEFIRMS[unit == "no", year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputNO$iGrid))` | `r length(unique(TableInputNO[Species == "SBF", iGrid]))`  | `r length(unique(OutputCEFIRMS[unit == "no", geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputNO$Fleet))` | `r length(unique(TableInputNO[Species == "SBF",Fleet]))` | `r length(unique(OutputCEFIRMS[unit == "no", flag]))` |
+| Number of species | `r length(unique(TableInputNO$Species))` | `r length(unique(TableInputNO[Species == "SBF", Species]))` |  `r length(unique(OutputCEFIRMS[unit == "no", species]))` |
+| Number of gears | `r length(unique(TableInputNO$Gear))` | `r length(unique(TableInputNO[Species == "SBF", Gear]))` | `r length(unique(OutputCEFIRMS[unit == "no", gear]))` |
+| Total catch (number) | `r prettyNum(sum(TableInputNO$Catch, na.rm = TRUE), big.mark = ",")` | `r prettyNum(sum(TableInputNO[Species == "SBF", Catch], na.rm = TRUE), big.mark = ",")` | `r prettyNum(sum(OutputCEFIRMS[unit == "no", value]), big.mark = ",")` |
+| **CATCH IN WEIGHT** | | | |
+| Year period | `r paste(min(TableInputMT$Year), max(TableInputMT$Year), sep = "-")` | `r paste(min(TableInputMT[Species == "SBF", Year]), max(TableInputMT[Species =="SBF", Year]), sep = "-")` | `r paste(min(OutputCEFIRMS[unit =="t", year_start]), max(OutputCEFIRMS[unit == "t", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputMT$Year, TableInputMT$MonthStart , sep = "-")))` | `r length(unique(paste(TableInputMT[Species == "SBF", Year],TableInputMT[Species == "SBF", MonthStart], sep = "-")))` | `r length(unique(OutputCEFIRMS[unit == "t", year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputMT$iGrid))` | `r length(unique(TableInputMT[Species == "SBF", iGrid]))` | `r length(unique(OutputCEFIRMS[unit == "t", geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputMT$Fleet))` | `r length(unique(TableInputMT[Species == "SBF", Fleet]))` | `r length(unique(OutputCEFIRMS[unit == "t", flag]))` |
+| Number of species | `r length(unique(TableInputMT$Species))` | `r length(unique(TableInputMT[Species == "SBF", Species]))` |  `r length(unique(OutputCEFIRMS[unit == "t", species]))` |
+| Number of gears | `r length(unique(TableInputMT$Gear))` | `r length(unique(TableInputMT[Species == "SBF", Gear]))` | `r length(unique(OutputCEFIRMS[unit == "t", gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputMT$Catch, na.rm = TRUE), big.mark = ",")` | `r prettyNum(round(sum(TableInputMT[Species == "SBF", Catch], na.rm = TRUE)), big.mark = ",")` | `r prettyNum(sum(OutputCEFIRMS[unit == "t", value]), big.mark = ",")` |
+
+```{r SpatialStrataRemoved}
+OriginalSpatialStrataTableInputNO = unique(TableInputNO$iGrid)
+FinalSpatialStrataOutputCEFIRMS = unique(OutputCEFIRMS[unit== "no",geographic_identifier])
+SpatialStrataRemoved = OriginalSpatialStrataTableInputNO[!(OriginalSpatialStrataTableInputNO %in% FinalSpatialStrataOutputCEFIRMS)]
+```
+\pagebreak
+
+```{r DisplaySpatialStrataRemoved}
+kable(IOTCGrids[FISHING_GROUND_CODE %in% SpatialStrataRemoved,.(CODE=FISHING_GROUND_CODE,TYPE=FISHING_GROUND_TYPE,LON=LON_X,LAT=LAT_X,SURFACE_KM2=round(OCEAN_AREA_SURFACE_KM2))],caption = "Spatial strata where only catches of SBF were reported which were removed from the original (Input) geo-referenced data set of all Indian Ocean fisheries catches")
+```
+
+## Data set "global_catch_1deg_1m_ps_bb_firms_level0"
+
+**Table 14:** Comparison between the original (Input) and fully harmonized (Output 2) geo-referenced data set of Indian Ocean surface fisheries catches by 1x1 grids. Input-SBF describes the input data for southern bluefin tuna (SBF)
+
+| Variable | Input | Input-SBF | Output 2 | 
+| :----------------------------- | :-----------------------: | :-----------------: | :---------------------------------: |
+| **LS CATCH IN WEIGHT** | | |
+| Year period | `r paste(min(TableInputLSSurface[, Year]), max(TableInputLSSurface[, Year]), sep = "-")` | - | `r paste(min(OutputCEFIRMSurface[schooltype == "LS", year_start]), max(OutputCEFIRMSurface[schooltype == "LS", year_start]),sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputLSSurface[, Year], TableInputLSSurface[, MonthStart], sep = "-")))` | - | `r length(unique(OutputCEFIRMSurface[schooltype == "LS", year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputLSSurface[, iGrid]))`  | - | `r length(unique(OutputCEFIRMSurface[schooltype == "LS", geographic_identifier]))`|
+| Number of fishing entities | `r length(unique(TableInputLSSurface[, Fleet]))` | - | `r length(unique(OutputCEFIRMSurface[schooltype == "LS", flag]))` |
+| Number of species | `r length(unique(TableInputLSSurface[, Species]))` |  - | `r length(unique(OutputCEFIRMSurface[schooltype == "LS", species]))` |
+| Number of gears | `r length(unique(TableInputLSSurface[, Gear]))` | - | `r length(unique(OutputCEFIRMSurface[schooltype == "LS", gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputLSSurface[, Catch], na.rm = TRUE), big.mark = ",")` | - | `r prettyNum(sum(OutputCEFIRMSurface[schooltype == "LS", value]), big.mark = ",")` |
+| **FS CATCH IN WEIGHT** | | | |
+| Year period | `r paste(min(TableInputFSSurface[, Year]), max(TableInputFSSurface[, Year]), sep = "-")` | `r paste(min(TableInputFSSurface[Species == "SBF", Year]), max(TableInputFSSurface[Species == "SBF", Year]),sep = "-")` | `r paste(min(OutputCEFIRMSurface[schooltype == "FS", year_start]), max(OutputCEFIRMSurface[schooltype == "FS", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputFSSurface[, Year],TableInputFSSurface[, MonthStart],sep = "-")))` | `r length(unique(paste(TableInputFSSurface[Species == "SBF", Year], TableInputFSSurface[Species == "SBF", MonthStart], sep = "-")))` | `r length(unique(OutputCEFIRMSurface[schooltype == "FS", year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputFSSurface[, iGrid]))`  | `r length(unique(TableInputFSSurface[Species == "SBF" , iGrid]))` | `r length(unique(OutputCEFIRMSurface[schooltype == "FS", geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputFSSurface[, Fleet]))` | `r length(unique(TableInputFSSurface[Species == "SBF", Fleet]))` | `r length(unique(OutputCEFIRMSurface[schooltype == "FS", flag]))` |
+| Number of species | `r length(unique(TableInputFSSurface[, Species]))` | `r length(unique(TableInputFSSurface[Species=="SBF", Species]))` | `r length(unique(OutputCEFIRMSurface[schooltype == "FS", species]))` |
+| Number of gears | `r length(unique(TableInputFSSurface[, Gear]))` | `r length(unique(TableInputFSSurface[Species == "SBF", Gear]))` | `r length(unique(OutputCEFIRMSurface[schooltype == "FS", gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputFSSurface[, Catch],na.rm=T), big.mark = ",")` | `r prettyNum(sum(TableInputFSSurface[Species == "SBF", Catch], na.rm = TRUE), big.mark = ",")` | `r prettyNum(sum(OutputCEFIRMSurface[schooltype == "FS", value]), big.mark = ",")` |
+| **UNCL CATCH IN WEIGHT** | | | |
+| Year period | `r paste(min(TableInputUNCLSurface[, Year]), max(TableInputUNCLSurface[, Year]), sep = "-")` | `r paste(min(TableInputUNCLSurface[Species == "SBF", Year]), max(TableInputUNCLSurface[Species == "SBF", Year]),sep="-")` | `r paste(min(OutputCEFIRMSurface[schooltype == "UNK", year_start]), max(OutputCEFIRMSurface[schooltype == "UNK", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputUNCLSurface[, Year], TableInputUNCLSurface[, MonthStart], sep = "-")))` | `r length(unique(paste(TableInputUNCLSurface[Species == "SBF", Year], TableInputUNCLSurface[Species == "SBF", MonthStart], sep = "-")))` | `r length(unique(OutputCEFIRMSurface[schooltype == "UNK", year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputUNCLSurface[, iGrid]))`  | `r length(unique(TableInputUNCLSurface[Species == "SBF" , iGrid]))` | `r length(unique(OutputCEFIRMSurface[schooltype == "UNK", geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputUNCLSurface[, Fleet]))` | `r length(unique(TableInputUNCLSurface[Species == "SBF", Fleet]))` | `r length(unique(OutputCEFIRMSurface[schooltype == "UNK", flag]))` |
+| Number of species | `r length(unique(TableInputUNCLSurface[, Species]))` | 1 | `r length(unique(OutputCEFIRMSurface[schooltype == "UNK", species]))` |
+| Number of gears | `r length(unique(TableInputUNCLSurface$Gear))` | `r length(unique(TableInputUNCLSurface[Species == "SBF", Gear]))` | `r length(unique(OutputCEFIRMSurface[schooltype == "UNK", gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputUNCLSurface[, Catch], na.rm = T), big.mark = ",")` | `r prettyNum(round(sum(TableInputUNCLSurface[Species == "SBF", Catch], na.rm = T)), big.mark = ",")` | `r prettyNum(sum(OutputCEFIRMSurface[schooltype == "UNK"  & unit == "t", value]), big.mark = ",")` |
+
+
+```{r StrataComparisonSurfaceFisheries, eval = FALSE}
+CatchYearSpatialStrataInput = TableInputFSSurface[,.(Catch=sum(Catch,na.rm=T)),.(Year,iGrid,Grid,Species)]
+CatchYearSpatialStrataOutput = OutputCEFIRMSurface[schooltype == "FS"  & unit == "t", .(Catch = sum(value,na.rm=T)), .(Year = year_start, Grid = as.integer(geographic_identifier), Species = species)]
+
+pipo = merge.data.table(CatchYearSpatialStrataInput,CatchYearSpatialStrataOutput, by = c("Year", "Grid", "Species"), all.x = TRUE, suffixes = c("_input","_output"))
+MissingStrata = pipo[is.na(Catch_output)]
+MissingStrata[!Species %in% c("SBF", "NTAD")]
+```
+
+## Data set "global_catch_5deg_1m_firms_level0"
+
+**Table 15:** Comparison between the original (Input) and fully harmonized (Output 2) geo-referenced data set of all Indian Ocean surface fisheries catches expressed in 5x5 grids. Input-SBF describes the input data for southern bluefin tuna (SBF)
+
+| Variable | Input | Input-SBF | Output 2 | 
+| :----------------------------- | :-----------------------: | :-----------------: | :---------------------------------: |
+| **CATCH IN NUMBER** | | | |
+| Year period | `r paste(min(TableInputNO_5x5$Year), max(TableInputNO_5x5$Year), sep = "-")` | `r paste(min(TableInputNO_5x5[Species == "SBF", Year]),max(TableInputNO_5x5[Species == "SBF", Year]), sep = "-")` | `r paste(min(OutputCEFIRMS_5deg[unit == "no", year_start]), max(OutputCEFIRMS_5deg[unit == "no", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputNO_5x5$Year, TableInputNO_5x5$MonthStart, sep = "-")))` | `r length(unique(paste(TableInputNO_5x5[Species == "SBF", Year], TableInputNO_5x5[Species == "SBF", MonthStart], sep = "-")))` | `r length(unique(OutputCEFIRMS_5deg[unit == "no", year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputNO_5x5$Grid5x5))` | `r length(unique(TableInputNO_5x5[Species == "SBF", Grid5x5]))`  | `r length(unique(OutputCEFIRMS_5deg[unit== "no",geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputNO_5x5$Fleet))` | `r length(unique(TableInputNO_5x5[Species == "SBF", Fleet]))` | `r length(unique(OutputCEFIRMS_5deg[unit== "no", flag]))` |
+| Number of species | `r length(unique(TableInputNO_5x5$Species))` | `r length(unique(TableInputNO_5x5[Species == "SBF", Species]))` |  `r length(unique(OutputCEFIRMS_5deg[unit== "no", species]))` |
+| Number of gears | `r length(unique(TableInputNO_5x5$Gear))` | `r length(unique(TableInputNO_5x5[Species == "SBF",Gear]))` | `r length(unique(OutputCEFIRMS_5deg[unit== "no", gear]))` |
+| Total catch (number) | `r prettyNum(sum(TableInputNO_5x5$Catch, na.rm = TRUE),big.mark = ",")` | `r prettyNum(sum(TableInputNO_5x5[Species == "SBF", Catch], na.rm = TRUE), big.mark = ",")` | `r prettyNum(sum(OutputCEFIRMS_5deg[unit ==  "no", value]), big.mark = ",")` |
+| **CATCH IN WEIGHT** | | | |
+| Year period | `r paste(min(TableInputMT_5x5$Year),max(TableInputMT_5x5$Year), sep = "-")` | `r paste(min(TableInputMT_5x5[Species == "SBF", Year]),max(TableInputMT_5x5[Species == "SBF", Year]), sep = "-")` | `r paste(min(OutputCEFIRMS_5deg[unit == "t", year_start]), max(OutputCEFIRMS_5deg[unit == "t", year_start]), sep = "-")` |
+| Number of temporal strata (year-month) | `r length(unique(paste(TableInputMT_5x5$Year,TableInputMT_5x5$MonthStart, sep = "-")))` | `r length(unique(paste(TableInputMT_5x5[Species == "SBF", Year], TableInputMT_5x5[Species == "SBF", MonthStart], sep = "-")))` | `r length(unique(OutputCEFIRMS_5deg[unit == "t", year_month_start]))` |
+| Number of spatial strata | `r length(unique(TableInputMT_5x5$Grid5x5))` | `r length(unique(TableInputMT_5x5[Species == "SBF", Grid5x5]))` | `r length(unique(OutputCEFIRMS_5deg[unit == "t", geographic_identifier]))` |
+| Number of fishing entities | `r length(unique(TableInputMT_5x5$Fleet))` | `r length(unique(TableInputMT_5x5[Species == "SBF", Fleet]))` | `r length(unique(OutputCEFIRMS_5deg[unit == "t", flag]))` |
+| Number of species | `r length(unique(TableInputMT_5x5$Species))` | `r length(unique(TableInputMT_5x5[Species == "SBF", Species]))` |  `r length(unique(OutputCEFIRMS_5deg[unit == "t", species]))` |
+| Number of gears | `r length(unique(TableInputMT_5x5$Gear))` | `r length(unique(TableInputMT_5x5[Species == "SBF", Gear]))` | `r length(unique(OutputCEFIRMS_5deg[unit == "t", gear]))` |
+| Total catch (t) | `r prettyNum(sum(TableInputMT_5x5$Catch,na.rm=T),big.mark=",")` | `r prettyNum(round(sum(TableInputMT_5x5[Species == "SBF", Catch], na.rm = T)), big.mark = ",")` | `r prettyNum(sum(OutputCEFIRMS_5deg[unit == "t", value]), big.mark = ",")` |
+
+
+
+
+

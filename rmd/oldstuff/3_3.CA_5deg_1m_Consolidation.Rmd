@@ -1,0 +1,27 @@
+```{r Fields_Addition_Formatting, echo = TRUE}
+# Add source authority
+CA_55M[, `:=` (source_authority = "IOTC")]
+
+# Add fishing mode (to be removed in future exports)
+CA_55M[, `:=` (fishing_mode = fifelse(CATCH_SCHOOL_TYPE_CODE == "LA", "LS",
+                                         fifelse(CATCH_SCHOOL_TYPE_CODE == "UNCL", "UNK", 
+                                                 fifelse(CATCH_SCHOOL_TYPE_CODE == "FD", "DEL",
+                                                         CATCH_SCHOOL_TYPE_CODE))))]
+
+# Add unit
+CA_55M[, `:=` (unit = CATCH_UNIT_CODE)]
+
+# Add measurements fields
+CA_55M[, `:=` (measurement = "catch", measurement_type = "Landings")]
+
+# Add measurement observation
+CA_55M[, `:=` (measurement_obs = fifelse(RAISE_CODE == "OS", "original sample", 
+                                              fifelse(RAISE_CODE == "SD", "raised", "unknown")))]
+
+# Add time_start
+CA_55M[, `:=` (time_start = as.character(as.Date(paste(YEAR, "-", MONTH_START, "-01", sep = ""), format = "%Y-%m-%d")))]
+
+# Add time_end
+CA_55M[, `:=` (time_end = as.character(as.Date(paste(YEAR, "-", MONTH_END, "-01", sep = ""), format = "%Y-%m-%d") %m+% months(1) - 1))]
+```
+

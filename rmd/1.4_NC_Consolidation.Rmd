@@ -1,0 +1,38 @@
+```{r Fields_Addition_Fishing_Mode, echo = TRUE}
+# Get information on purse seine school types
+source("../initialisation/RC_CA_PS_SCHOOL_TYPE.R")
+
+# Add Purse Seine School Types
+NC = merge(NC, RC_PS_STRATA_SCHOOL_TYPE_PROP, by = c("YEAR", "FLEET_CODE", "GEAR_CODE", "SPECIES_CODE"), all.x = TRUE)
+
+# Update catch with information on school type
+NC[!is.na(CATCH_SCHOOL_TYPE_CODE), CATCH := CATCH * PROP_BY_ST]
+
+# Update school type without information on school type
+NC[is.na(CATCH_SCHOOL_TYPE_CODE), CATCH_SCHOOL_TYPE_CODE := "UNCL"]
+
+# Remove school type proportion
+NC[, PROP_BY_ST := NULL]
+```
+
+```{r Fields_Addition_Formatting, echo = TRUE}
+# Add source authority
+NC[, `:=` (source_authority = "IOTC")]
+
+NC[, `:=` (fishing_mode = fifelse(CATCH_SCHOOL_TYPE_CODE == "LA", "LS",
+                                         fifelse(CATCH_SCHOOL_TYPE_CODE == "UNCL", "UNK", 
+                                                 fifelse(CATCH_SCHOOL_TYPE_CODE == "FD", "DEL",
+                                                         CATCH_SCHOOL_TYPE_CODE))))]
+# Add time_start and time_end
+NC[, `:=` (time_start = as.character(as.Date(paste(YEAR, "-01-01" , sep = ""), format = "%Y-%m-%d")), 
+                    time_end = as.character(as.Date(paste(YEAR, "-12-31" , sep = ""), format = "%Y-%m-%d")))]
+
+# Format IOTC areas
+NC[, geographic_identifier := fifelse(FISHING_GROUND_CODE == "IREASIO", "IOTC_EAST", fifelse(FISHING_GROUND_CODE == "IRWESIO", "IOTC_WEST", "OTHER"))]
+
+# Add measurements fields
+NC[, `:=` (measurement = "catch", 
+                    measurement_type = "NL", 
+                    measurement_unit = "t", 
+                    measurement_obs = "unknown")]
+```

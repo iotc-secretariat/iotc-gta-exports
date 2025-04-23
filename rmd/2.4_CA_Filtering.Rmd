@@ -1,0 +1,72 @@
+```{r Species_Filtering, echo = TRUE}
+# Read LEVEL 0 species code list
+LEVEL0_SPECIES = fread("../inputs/codelists/cl_species_level0.csv")
+
+# Species not occurring in the Indian Ocean
+SPECIES_TO_EXCLUDE = c("SAI", "SPF", "BFT", "WHM", "LTA", "SBF") #, "AG01", "AG02", "AG06", "AG07", "AG34", "AG35")
+
+# Exclude the species from the data set
+SPECIES_EXCLUDED = unique(CA_M_MAPPED_SPECIES_GEAR_FLEET[!species %in% LEVEL0_SPECIES$code | species %in% SPECIES_TO_EXCLUDE, SPECIES_CODE])
+
+# Filter on GTA level 1 species
+CA_S = CA_M_MAPPED_SPECIES_GEAR_FLEET[!species %in% SPECIES_EXCLUDED]
+```
+
+```{r CatchBySpeciesExcluded, echo = FALSE}
+# Compute catch by excluded species
+CA_SPECIES_EXCLUDED = CA_M_MAPPED_SPECIES_GEAR_FLEET[species %in% SPECIES_EXCLUDED, .(YEAR_INITIAL = min(YEAR), YEAR_FINAL = max(YEAR), CATCH = sum(CATCH)), keyby = .(species, CATCH_UNIT_CODE)]
+
+# Add species information
+CA_SPECIES_EXCLUDED_TABLE = merge(CA_SPECIES_EXCLUDED, SPECIES[, .(code, name_en, definition, taxon_family)], by.x = "species", by.y = "code", all.x = TRUE)[, .(CODE = species, FAMILY = taxon_family, NAME = name_en, SCIENTIFIC_NAME = definition, YEAR_INITIAL, YEAR_FINAL, UNIT = CATCH_UNIT_CODE, CATCH = CATCH)][order(FAMILY, CODE)]
+```
+
+
+```{r Spatio_temporal_Strata_Filtering, echo = TRUE}
+# Temporal filter of one month
+CA_TF = CA_S[MONTH_END - MONTH_START == 0]
+
+# Restrict to data reported with a regular grid spatial resolution
+# Remove "2120060" and "9000000" "9000020" "9000080" "9100020" "9100080" "9200020" "9200080" 
+CA_SF1 = CA_TF[as.numeric(substr(FISHING_GROUND_CODE, 1, 1)) %in% c(5, 6)]
+
+# Merge with regular 1x1 and 5x5 Indian Ocean grid
+CA_SF2 = merge(CA_SF1, IO_STANDARD_GRIDS, by.x = "FISHING_GROUND_CODE", by.y = "CODE", all.x = TRUE)
+
+# Remove grids outside Indian Ocean
+CA = CA_SF2[!is.na(AREA_TYPE_CODE)]
+```
+
+```{r Temporal_Strata_Removed, echo = FALSE}
+CA_EXCLUDED_TEMPORAL = CA_S[MONTH_END - MONTH_START != 0]
+
+# Compute the monthly difference
+CA_EXCLUDED_TEMPORAL[, MONTH_DIFF := as.character(MONTH_END - MONTH_START + 1)]
+
+# Compute the catches excluded by time bin
+CA_EXCLUDED_TEMPORAL_TABLE = CA_EXCLUDED_TEMPORAL[, .(CATCH = sum(CATCH)), keyby = .(MONTH_DIFF, UNIT = CATCH_UNIT_CODE)]
+```
+
+```{r Spatial_Strata_Removed, echo = FALSE}
+# Extract data NOT reported with a 5x5 grid spatial resolution
+CA_NON_REGULAR_GRID = CA_TF[!as.numeric(substr(FISHING_GROUND_CODE, 1, 1)) %in% c(5, 6)]
+
+# Add information on grid type
+CA_NON_REGULAR_GRID = merge(CA_NON_REGULAR_GRID, filter_grids()[, .(FISHING_GROUND_CODE, FISHING_GROUND_TYPE)], by = "FISHING_GROUND_CODE", all.x = TRUE)
+
+# Irregular grids (not included in filter_grids())
+CA_NON_REGULAR_GRID[is.na(FISHING_GROUND_TYPE), FISHING_GROUND_TYPE := "IRREGULAR"]
+
+# Compute the catches non reported on regular grids excluded by type of grid
+CA_NON_REGULAR_GRID_TABLE = CA_NON_REGULAR_GRID[, .(CATCH = sum(CATCH)), keyby = .(GRID_TYPE = FISHING_GROUND_TYPE, UNIT = CATCH_UNIT_CODE)]
+
+# Extract data reported in regular grids outside the Indian Ocean
+CA_REGULAR_GRIDS_KO = CA_SF2[is.na(AREA_TYPE_CODE)]
+CA_REGULAR_GRIDS_KO[substring(FISHING_GROUND_CODE, 1, 1) == "5", GRID_TYPE := "GRID01x01"]
+CA_REGULAR_GRIDS_KO[substring(FISHING_GROUND_CODE, 1, 1) == "6", GRID_TYPE := "GRID05x05"]
+
+CA_REGULAR_GRIDS_KO_TABLE = CA_REGULAR_GRIDS_KO[, .(CATCH = sum(CATCH)), keyby = .(GRID_TYPE, UNIT = CATCH_UNIT_CODE)]
+
+CA_EXCLUDED_SPATIAL_TABLE = rbindlist(list(CA_REGULAR_GRIDS_KO_TABLE, CA_NON_REGULAR_GRID_TABLE))
+```
+
+

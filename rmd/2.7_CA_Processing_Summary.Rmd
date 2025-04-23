@@ -1,0 +1,14 @@
+```{r ProcessingSteps, echo = FALSE}
+CA_PROCESSING_STEPS_TABLE = data.table(DATA_SET = c("CA_RAW", "CA_M_MAPPED_SPECIES", "CA_M_MAPPED_SPECIES_GEAR", "CA_M_MAPPED_SPECIES_GEAR_FLEET", "CA"), 
+                                    DESCRIPTION = c("All species, gears, and fleets", "Species mapped to the ASFIS code list", "Gears mapped to the ISSCFG code list", "Fleets mapped to the FIRMS fleet code list", "Filter on GTA species occurring in the Indian Ocean and spatio-temporal resolution"), 
+                                    SPECIES = c(length(unique(CA_RAW$SPECIES_CODE)), length(unique(CA_M_MAPPED_SPECIES$species)), length(unique(CA_M_MAPPED_SPECIES_GEAR$species)), length(unique(CA_M_MAPPED_SPECIES_GEAR_FLEET$species)), length(unique(CA$species))), 
+                                    GEARS = c(length(unique(CA_RAW$GEAR_CODE)), length(unique(CA_M_MAPPED_SPECIES$GEAR_CODE)), length(unique(CA_M_MAPPED_SPECIES_GEAR$gear_type)), length(unique(CA_M_MAPPED_SPECIES_GEAR_FLEET$gear_type)), length(unique(CA$gear_type))), 
+                                    FLEETS = c(length(unique(CA_RAW$FLEET_CODE)), length(unique(CA_M_MAPPED_SPECIES$FLEET_CODE)), length(unique(CA_M_MAPPED_SPECIES_GEAR$FLEET_CODE)),  length(unique(CA_M_MAPPED_SPECIES_GEAR_FLEET$fleet)), length(unique(CA$fleet))), 
+                                    CATCH_t = c(round(sum(CA_RAW[CATCH_UNIT_CODE == "t", CATCH])), round(sum(CA_M_MAPPED_SPECIES[CATCH_UNIT_CODE == "t", CATCH])), round(sum(CA_M_MAPPED_SPECIES_GEAR[CATCH_UNIT_CODE == "t", CATCH])), round(sum(CA_M_MAPPED_SPECIES_GEAR_FLEET[CATCH_UNIT_CODE == "t", CATCH])), round(sum(CA[CATCH_UNIT_CODE == "t", CATCH]))),
+                                    CATCH_no = c(round(sum(CA_RAW[CATCH_UNIT_CODE == "no", CATCH])), round(sum(CA_M_MAPPED_SPECIES[CATCH_UNIT_CODE == "no", CATCH])), round(sum(CA_M_MAPPED_SPECIES_GEAR[CATCH_UNIT_CODE == "no", CATCH])), round(sum(CA_M_MAPPED_SPECIES_GEAR_FLEET[CATCH_UNIT_CODE == "no", CATCH])), round(sum(CA[CATCH_UNIT_CODE == "no", CATCH])))
+)
+```
+
+```{r ProcessingSummaryTable}
+datatable(CA_PROCESSING_STEPS_TABLE, rownames = FALSE, options = list(dom = 't')) %>% formatRound(c("CATCH_t", "CATCH_no"), digits = 0) %>% formatStyle(c("CATCH_t", "CATCH_no"), `text-align` = "right")
+```

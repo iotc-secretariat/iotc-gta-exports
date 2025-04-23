@@ -1,0 +1,16 @@
+```{r Data_extraction, echo = TRUE}
+# Extract geo-referenced catch data for tuna and tuna-like species
+CA_RAW_TUNA_LIKE_SPECIES = CA_raw_off(species_category_codes = c("BILLFISH", "NERITIC", "TEMPERATE", "TROPICAL", "TUNAS_NEI", "SEERFISH"), factorize_result = FALSE)
+
+# Extract geo-referenced catch data for the most commonly caught sharks
+CA_RAW_SHARKS = CA_raw_off(species_codes = c("SKH", "BSH", "FAL", "SPN", "THR", "MAK", "SMA", "RSK", "OCS", "ALV", "PTH", "SPZ", "POR", "SPL", "LMA", "BTH", "TIG", "PSK", "SPK", "WSH", "RHN"), factorize_result = FALSE)
+
+# Extract geo-referenced catch data for the most commonly caught rays
+CA_RAW_RAYS = CA_raw_off(species_codes = c("PLS", "RMJ", "RMB", "RMM"), factorize_result = FALSE)
+
+CA_RAW = rbindlist(list(CA_RAW_TUNA_LIKE_SPECIES, CA_RAW_SHARKS, CA_RAW_RAYS))
+
+# Temp fix for units
+CA_RAW[CATCH_UNIT_CODE == "MT", CATCH_UNIT_CODE := "t"]
+CA_RAW[CATCH_UNIT_CODE == "NO", CATCH_UNIT_CODE := "no"]
+```

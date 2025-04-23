@@ -1,0 +1,19 @@
+```{r Species_Filtering, echo = TRUE, message = FALSE}
+# Species not occurring in the Indian Ocean
+SPECIES_TO_EXCLUDE = c("BFT", "LTA", "SAI", "SBF", "SPF", "WHM")
+
+# Combine all species excluded from the data set
+SPECIES_EXCLUDED = unique(NC_MAPPED_SPECIES_GEAR_FLEET[!species %in% LEVEL0_SPECIES$code | species %in% SPECIES_TO_EXCLUDE, species])
+
+# Exclude the species from the data set
+NC = NC_MAPPED_SPECIES_GEAR_FLEET[!species %in% SPECIES_EXCLUDED]
+```
+
+```{r NominalCatchBySpeciesExcluded, echo = FALSE}
+# Compute catch by excluded species
+NC_SPECIES_EXCLUDED = NC_MAPPED_SPECIES_GEAR_FLEET[species %in% SPECIES_EXCLUDED, .(YEAR_INITIAL = min(YEAR), YEAR_FINAL = max(YEAR), CATCH = sum(CATCH)), keyby = .(species)]
+
+# Add species information
+NC_SPECIES_EXCLUDED_TABLE = merge(NC_SPECIES_EXCLUDED, SPECIES[, .(code, name_en, definition, taxon_family)], by.x = "species", by.y = "code", all.x = TRUE)[, .(CODE = species, FAMILY = taxon_family, NAME = name_en, SCIENTIFIC_NAME = definition, YEAR_INITIAL, YEAR_FINAL, CATCH = CATCH)][order(FAMILY, CODE)]
+```
+

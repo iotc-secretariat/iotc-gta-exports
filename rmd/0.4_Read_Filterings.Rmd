@@ -1,0 +1,5 @@
+```{r ReadFiltering files, echo = TRUE}
+# Species filtering
+LEVEL0_SPECIES = fread("../inputs/codelists/cl_species_level0.csv")
+```
+

@@ -1,0 +1,17 @@
+<<<<<<< HEAD
+.Rhistory
+.Rproj.user
+*.rda
+*.rdb
+*.md
+*.docx
+*.html
+*.csv
+*.xlsx
+*.zip
+*.rar
+=======
+*.csv
+
+>>>>>>> release/2021
+

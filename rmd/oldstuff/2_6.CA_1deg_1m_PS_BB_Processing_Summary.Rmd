@@ -1,0 +1,14 @@
+```{r ProcessingSteps, echo = FALSE}
+CA_PS_BB_11M_PROCESSING_STEPS_TABLE = data.table(DATA_SET = c("CA_PS_BB_RAW", "CA_PS_BB_11M", "CA_PS_BB_11M_MAPPED_SPECIES", "CA_PS_BB_11M_MAPPED_SPECIES_GEAR", "CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET"), 
+                                    DESCRIPTION = c("All species, gears, and fleets", "Keep species only occurring in Indian Ocean and resolution of 1°x1°-month", "Species mapped with ASFIS code list", "Gears mapped with ISSCFG code list", "Fleets mapped with FIRMS fleet code list"), 
+                                    SPECIES = c(length(unique(CA_PS_BB_RAW$SPECIES_CODE)), length(unique(CA_PS_BB_11M$SPECIES_CODE)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES$species)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES_GEAR$species)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET$species))), 
+                                    GEARS = c(length(unique(CA_PS_BB_RAW$GEAR_CODE)), length(unique(CA_PS_BB_11M$GEAR_CODE)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES$GEAR_CODE)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES_GEAR$gear)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET$gear))), 
+                                    FLEETS = c(length(unique(CA_PS_BB_RAW$FLEET_CODE)), length(unique(CA_PS_BB_11M$FLEET_CODE)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES$FLEET_CODE)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES_GEAR$FLEET_CODE)), length(unique(CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET$fleet))), 
+                                    CATCH_t = c(pn(round(sum(CA_PS_BB_RAW[CATCH_UNIT_CODE == "t", CATCH]))), pn(round(sum(CA_PS_BB_11M[CATCH_UNIT_CODE == "t", CATCH]))), pn(round(sum(CA_PS_BB_11M_MAPPED_SPECIES[CATCH_UNIT_CODE == "t", CATCH]))), pn(round(sum(CA_PS_BB_11M_MAPPED_SPECIES_GEAR[CATCH_UNIT_CODE == "t", CATCH]))),  pn(round(sum(CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET[CATCH_UNIT_CODE == "t", CATCH])))), 
+                                    CATCH_no = c(pn(round(sum(CA_PS_BB_RAW[CATCH_UNIT_CODE == "no", CATCH]))), pn(round(sum(CA_PS_BB_11M[CATCH_UNIT_CODE == "no", CATCH]))), pn(round(sum(CA_PS_BB_11M_MAPPED_SPECIES[CATCH_UNIT_CODE == "no", CATCH]))), pn(round(sum(CA_PS_BB_11M_MAPPED_SPECIES_GEAR[CATCH_UNIT_CODE == "no", CATCH]))),  pn(round(sum(CA_PS_BB_11M_MAPPED_SPECIES_GEAR_FLEET[CATCH_UNIT_CODE == "no", CATCH]))))
+)
+```
+
+```{r ProcessingSummaryTable}
+datatable(CA_PS_BB_11M_PROCESSING_STEPS_TABLE[, -c("CATCH_no")], rownames = FALSE, options = list(dom = 't')) %>% formatStyle('CATCH_t', `text-align` = 'right')
+```

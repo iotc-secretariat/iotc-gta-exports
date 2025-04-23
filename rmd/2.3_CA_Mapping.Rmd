@@ -1,0 +1,21 @@
+```{r Species_Gear_Fleet_Mapping, echo = TRUE}
+# Merge with ASFIS species list
+CA_M_MAPPED_SPECIES = merge(CA_RAW, MAPPING_SPECIES[src_codingsystem == "species_iotc" & trg_codingsystem == "species_asfis", .(src_code, species = trg_code)], by.x = "SPECIES_CODE", by.y = "src_code", all.x = TRUE)
+
+# Merge with ISSCFG gear list
+CA_M_MAPPED_SPECIES_GEAR = merge(CA_M_MAPPED_SPECIES, MAPPING_GEAR[src_codingsystem == "gear_iotc" & trg_codingsystem == "isscfg_revision_1", .(src_code, gear_type = trg_code)], by.x = "GEAR_CODE", by.y = "src_code", all.x = TRUE)
+
+# Merge with FIRMS fleet list
+CA_M_MAPPED_SPECIES_GEAR_FLEET = merge(CA_M_MAPPED_SPECIES_GEAR, MAPPING_FLEET[src_codingsystem == "flag_iotc" & trg_codingsystem == "fishingfleet_firms", .(src_code, fishing_fleet = trg_code)], by.x = "FLEET_CODE", by.y = "src_code", all.x = TRUE)
+```
+
+```{r Mapping_Check, echo = FALSE}
+# Check if missing species
+if (nrow(CA_M_MAPPED_SPECIES[is.na(species)])>0) print(paste("The following species codes are missing from the mapping: ", paste0(unique(CA_M_MAPPED_SPECIES[is.na(species), SPECIES_CODE]), collapse = "|")))
+
+# Check if missing gears
+if (nrow(CA_M_MAPPED_SPECIES_GEAR[is.na(gear_type)])>0) print(paste("The following gear codes are missing from the mapping: ", paste0(unique(CA_M_MAPPED_SPECIES_GEAR[is.na(gear_type), GEAR_CODE]), collapse = "|")))
+
+# Check if missing fleets
+if (nrow(CA_M_MAPPED_SPECIES_GEAR_FLEET[is.na(fishing_fleet)])>0) print(paste("The following flag codes are missing from the mapping: ", paste0(unique(CA_M_MAPPED_SPECIES_GEAR_FLEET[is.na(fishing_fleet), FLEET_CODE]), collapse = "|")))
+```
