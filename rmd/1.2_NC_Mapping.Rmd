@@ -19,6 +19,3 @@ if (nrow(NC_MAPPED_SPECIES_GEAR[is.na(gear_type)])>0) print( paste("The followin
 # Check for missing fleets
 if (nrow(NC_MAPPED_SPECIES_GEAR_FLEET[is.na(fishing_fleet)])>0) print( paste("The following fleet codes are missing from the mapping: ", paste0(unique(NC_MAPPED_SPECIES_GEAR_FLEET[is.na(fishing_fleet), FLEET_CODE]), collapse = "|")))
 ```
-
-
-

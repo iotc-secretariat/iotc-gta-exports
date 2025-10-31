@@ -8,7 +8,7 @@ setwd("..")
 
 # Define year range
 START_YEAR = 1950
-END_YEAR   = 2023
+END_YEAR   = 2024
 
 # IOTC annual nominal catch data set ####
 render("rmd/A_iotc_nominal_catch_firms_level0.Rmd",  
