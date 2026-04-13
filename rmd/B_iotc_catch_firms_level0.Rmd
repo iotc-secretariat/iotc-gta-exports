@@ -1,5 +1,5 @@
 ---
-title: "FIRMS Global Tuna Atlas: the IOTC geo-referenced catch dataset, 1952-`r END_YEAR`"
+title: "FIRMS Global Tuna Atlas: the IOTC Geo-Referenced Catch Dataset, 1952-`r END_YEAR`"
 author: "IOTC Secretariat"
 output: 
    html_document2:
