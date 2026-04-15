@@ -19,7 +19,7 @@ CA_RAW[, `:=` (unit = CATCH_UNIT_CODE)]
 CA_RAW[, `:=` (measurement = "catch", measurement_type = "NC")]
 
 # Add measurement observation
-CA_RAW[, `:=` (measurement_obs = fifelse(RAISE_CODE == "OS", "original sample", 
+CA_RAW[, `:=` (measurement_processing_level = fifelse(RAISE_CODE == "OS", "original_sample", 
                                               fifelse(RAISE_CODE == "SD", "raised", "unknown")))]
 
 # Add time_start

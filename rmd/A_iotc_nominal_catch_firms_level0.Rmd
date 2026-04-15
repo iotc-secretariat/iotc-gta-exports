@@ -3,7 +3,7 @@ title: "FIRMS Global Tuna Atlas: the IOTC Nominal Catch Dataset, `r paste(START_
 author: "IOTC Secretariat"
 output: 
    html_document2:
-    css: "../templates/html_template.css"
+    css: "../templates/fao_template_simplified.css"
     number_sections: false
     code_folding: show
     toc: true
@@ -85,13 +85,13 @@ The overall data processing resulted in the removal of `r length(unique(SPECIES_
 ```{r ProcessingSteps, child = "1.7_NC_Processing_Summary.Rmd"}
 ```
 
-## Nominal Catch Data Excluded from the GTA
+## Data Excluded
 
 ```{r DisplayNominalCatchBySpeciesExcluded, echo = FALSE}
 datatable(NC_SPECIES_EXCLUDED_TABLE, rownames = FALSE, filter = "bottom") %>% formatRound("CATCH", digits = 0) %>% formatStyle("SCIENTIFIC_NAME", `font-style` = "italic")
 ```
 
-## Nominal Catch Data Exported to the GTA
+## Data Exported
 
 ### Total Catch by IOTC Main Area
 

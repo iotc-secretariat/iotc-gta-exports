@@ -34,5 +34,5 @@ NC[, geographic_identifier := fifelse(FISHING_GROUND_CODE == "IREASIO", "IOTC_EA
 NC[, `:=` (measurement = "catch", 
                     measurement_type = "NL", 
                     measurement_unit = "t", 
-                    measurement_obs = "unknown")]
+                    measurement_processing_level = "unknown")]
 ```

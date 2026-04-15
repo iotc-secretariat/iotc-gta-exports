@@ -3,7 +3,7 @@ title: "FIRMS Global Tuna Atlas: the IOTC Geo-Referenced Catch Dataset, 1952-`r 
 author: "IOTC Secretariat"
 output: 
    html_document2:
-    css: "../templates/html_template.css"
+    css: "../templates/fao_template_simplified.css"
     number_sections: FALSE
     code_folding: show
     toc: true
@@ -90,7 +90,7 @@ The data processing resulted in the removal of `r pn(round(sum(CA_M_MAPPED_SPECI
 ```{r ProcessingSteps, child = "2.7_CA_Processing_Summary.Rmd"}
 ```
 
-## Geo-Referenced Catch Data Excluded from the GTA
+## Data Excluded
 
 The overall data processing resulted in the removal of a total of `r pn(round( sum(CA_RAW[unit == "t", CATCH]) - sum(CA[unit == "t", CATCH])))` t and `r pn(round( sum(CA_RAW[unit == "no", CATCH]) - sum(CA[unit == "no", CATCH])))` from the initial dataset. The filtering removed `r length(unique(SPECIES_EXCLUDED))` species from the dataset, representing `r pn(round(sum(CA_SPECIES_EXCLUDED_TABLE[UNIT == "t", CATCH])))` t and `r pn(round(sum(CA_SPECIES_EXCLUDED_TABLE[UNIT == "no", CATCH])))` fish. In addition, a total of `r length(unique(CA_NON_REGULAR_GRID$FISHING_GROUND_CODE))` spatial grids of resolution larger than 5°x5° were removed from the dataset, representing `r pn(round(sum(CA_NON_REGULAR_GRID[CATCH_UNIT_CODE == "t", CATCH])))` t of fish. Furthermore, a catch of `r pn(round(CA_REGULAR_GRIDS_KO_TABLE[UNIT == "no", sum(CATCH)]))` fish and `r pn(round(CA_REGULAR_GRIDS_KO_TABLE[UNIT == "t", sum(CATCH)]))` t of fish was removed from the dataset as it was reported for `r length(unique(CA_REGULAR_GRIDS_KO$FISHING_GROUND_CODE))` regular grids located outside the Indian Ocean. Also, some catch data were reported with a temporal resolution larger than 1 month, corresponding to a total of `r pn(round(sum(CA_EXCLUDED_TEMPORAL[CATCH_UNIT_CODE == "t", CATCH])))` t and `r pn(round(sum(CA_EXCLUDED_TEMPORAL[CATCH_UNIT_CODE == "no", CATCH])))` fish removed from the original dataset.
 
@@ -112,7 +112,7 @@ datatable(CA_EXCLUDED_SPATIAL_TABLE, rownames = FALSE, options = list(dom = "t")
 datatable(CA_EXCLUDED_TEMPORAL_TABLE, rownames = FALSE, options = list(dom = "t")) %>% formatRound("CATCH", digits = 0)
 ```
 
-## Geo-Referenced Catch Data Exported to the GTA
+## Data Exported
 
 ### Total Catch by Species
 

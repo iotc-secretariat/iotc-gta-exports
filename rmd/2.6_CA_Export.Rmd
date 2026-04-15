@@ -11,13 +11,13 @@ IOTC_CA_M_LEVEL0 = CA[, .(measurement_value = sum(CATCH)),
                                                                species, 
                                                                measurement, 
                                                                measurement_type, 
-                                                               measurement_obs, 
+                                                               measurement_processing_level, 
                                                                measurement_unit = unit, 
                                                                source_authority
                                                                )]
 
 # Order the columns
-setcolorder(IOTC_CA_M_LEVEL0, neworder = c("fishing_fleet", "time_start", "time_end", "geographic_identifier", "gear_type", "fishing_mode", "species", "measurement", "measurement_type", "measurement_value", "measurement_unit", "measurement_obs"))
+setcolorder(IOTC_CA_M_LEVEL0, neworder = c("fishing_fleet", "time_start", "time_end", "geographic_identifier", "gear_type", "fishing_mode", "species", "measurement", "measurement_type", "measurement_value", "measurement_unit", "measurement_processing_level"))
 
 # Export the data set
 write.csv(IOTC_CA_M_LEVEL0, file = paste0("../outputs/datasets/iotc_catch_all_1m_firms_level0_", Sys.Date(), ".csv"), row.names = FALSE)
